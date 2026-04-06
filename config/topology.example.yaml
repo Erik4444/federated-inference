@@ -1,0 +1,41 @@
+# Cluster topology configuration
+# Copy to topology.yaml and adjust for your environment.
+
+coordinator:
+  host: "0.0.0.0"             # bind address for the REST API
+  port: 8080
+  llama_server_host: "127.0.0.1"  # llama-server binds here (coordinator-local only)
+  llama_server_port: 8181
+  llama_server_binary: "llama-server"  # full path if not in $PATH
+  health_check_interval_seconds: 10
+  worker_timeout_seconds: 30
+  min_healthy_workers: 1       # refuse to start until at least N workers are healthy
+
+workers:
+  - id: "pi-node-1"
+    host: "192.168.1.101"
+    grpc_port: 50051
+    rpc_port: 8765
+    tags: ["arm64", "cpu-only"]
+    enabled: true
+
+  - id: "x86-workstation"
+    host: "192.168.1.102"
+    grpc_port: 50051
+    rpc_port: 8765
+    tags: ["x86_64", "nvidia-gpu"]
+    enabled: true
+
+  - id: "android-phone"
+    host: "192.168.1.103"     # Android device running Termux with federated-worker
+    grpc_port: 50051
+    rpc_port: 8765
+    tags: ["arm64", "termux"]
+    enabled: false            # set to true once the device is set up
+
+  - id: "jetson-orin"
+    host: "192.168.1.104"
+    grpc_port: 50051
+    rpc_port: 8765
+    tags: ["arm64", "cuda"]
+    enabled: true

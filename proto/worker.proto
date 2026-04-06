@@ -1,0 +1,91 @@
+syntax = "proto3";
+
+package federated_inference;
+
+// ── Service ───────────────────────────────────────────────────────────────────
+
+service WorkerService {
+  // One-shot RPC: coordinator calls this on startup or reconnect
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+
+  // Coordinator polls this on a schedule (e.g. every 10s)
+  rpc HealthCheck(HealthRequest) returns (HealthResponse);
+
+  // Coordinator explicitly asks the worker to start its llama-rpc-server
+  rpc StartRPC(StartRPCRequest) returns (StartRPCResponse);
+
+  // Coordinator asks the worker to stop its llama-rpc-server
+  rpc StopRPC(StopRPCRequest) returns (StopRPCResponse);
+
+  // Real-time streaming of device stats (optional, for dashboards)
+  rpc StreamMetrics(MetricsRequest) returns (stream MetricsSnapshot);
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+
+message RegisterRequest {
+  string worker_id  = 1; // stable ID, e.g. hostname or user-defined in config
+  string grpc_host  = 2; // host coordinator should use to reach this worker
+  int32  grpc_port  = 3;
+}
+
+message RegisterResponse {
+  bool   accepted = 1;
+  string message  = 2; // optional human-readable reason if rejected
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  enum Status {
+    UNKNOWN   = 0;
+    HEALTHY   = 1;
+    DEGRADED  = 2;
+    UNHEALTHY = 3;
+  }
+  Status     status             = 1;
+  DeviceInfo device_info        = 2;
+  bool       rpc_server_running = 3;
+  string     rpc_address        = 4; // host:port of llama-rpc-server if running
+}
+
+message DeviceInfo {
+  string arch              = 1; // e.g. "aarch64", "x86_64"
+  uint64 total_ram_bytes   = 2;
+  uint64 free_ram_bytes    = 3;
+  uint64 total_vram_bytes  = 4; // 0 if no GPU
+  uint64 free_vram_bytes   = 5;
+  string os_info           = 6; // e.g. "Linux 6.1 aarch64"
+  string llama_cpp_version = 7; // output of llama-rpc-server --version
+}
+
+message StartRPCRequest {
+  int32  port         = 1; // port for llama-rpc-server to listen on
+  uint64 mem_limit_mb = 2; // 0 = no cap
+}
+
+message StartRPCResponse {
+  bool   success = 1;
+  string address = 2; // host:port that coordinator should pass to --rpc
+  string error   = 3;
+}
+
+message StopRPCRequest {
+  bool force = 1; // SIGKILL vs SIGTERM
+}
+
+message StopRPCResponse {
+  bool   success = 1;
+  string error   = 2;
+}
+
+message MetricsRequest {
+  int32 interval_seconds = 1;
+}
+
+message MetricsSnapshot {
+  int64  timestamp_ms   = 1;
+  uint64 free_ram_bytes  = 2;
+  uint64 free_vram_bytes = 3;
+  float  cpu_percent     = 4;
+}
