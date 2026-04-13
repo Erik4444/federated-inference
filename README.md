@@ -169,7 +169,7 @@ federated-worker start --grpc-port 50051 --grpc-host 0.0.0.0
 
 ```bash
 source ~/.venvs/federated/bin/activate
-federated-coordinator start --topology topology.yaml --model model.yaml
+federated-coordinator start --topology config/topology.yaml --model config/model.yaml
 ```
 
 Watch the logs:

@@ -22,11 +22,12 @@ if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux" ]; then
   echo "==> Termux environment detected"
 fi
 
-# On Termux /usr/local doesn't exist — default to the Termux prefix
+# On Termux /usr/local doesn't exist — default to the Termux prefix.
+# On macOS/Linux default to ~/.local so no sudo is required.
 if $IS_TERMUX; then
   PREFIX="${1:-/data/data/com.termux/files/usr}"
 else
-  PREFIX="${1:-/usr/local}"
+  PREFIX="${1:-$HOME/.local}"
 fi
 
 # ── Install build deps ───────────────────────────────────────────────────────

@@ -30,6 +30,10 @@ class CoordinatorSettings(BaseModel):
     health_check_interval_seconds: int = 10
     worker_timeout_seconds: int = 30
     min_healthy_workers: int = 1
+    # UDP discovery: workers announce themselves so no static IPs are needed.
+    # Set to true to enable; discovery_port must match the workers' setting.
+    discovery: bool = False
+    discovery_port: int = 50052
 
 
 class TopologyConfig(BaseModel):

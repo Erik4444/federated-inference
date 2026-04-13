@@ -52,6 +52,16 @@ class Coordinator:
         # Health loop
         self._health_loop = HealthLoop(self.registry, settings)
 
+        # Optional UDP discovery
+        self._discovery = None
+        if settings.discovery:
+            from federated_inference.coordinator.discovery import WorkerDiscovery
+            self._discovery = WorkerDiscovery(
+                registry=self.registry,
+                port=settings.discovery_port,
+                on_new_worker=self._on_discovered_worker,
+            )
+
         # Wire state changes to llama_manager restart requests
         self.registry.on_state_change(self._on_worker_state_change)
 
