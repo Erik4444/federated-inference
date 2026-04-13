@@ -53,14 +53,15 @@ else
 fi
 if [ -d "$LLAMA_DIR/.git" ]; then
   echo "==> Updating existing llama.cpp clone in $LLAMA_DIR ..."
-  git -C "$LLAMA_DIR" pull --ff-only
+  git -C "$LLAMA_DIR" fetch --depth 1 origin tag "$LLAMA_VERSION"
+  git -C "$LLAMA_DIR" checkout "$LLAMA_VERSION"
 elif [ -e "$LLAMA_DIR" ]; then
   echo "==> $LLAMA_DIR exists but is not a git repo — removing and re-cloning..."
   rm -rf "$LLAMA_DIR"
-  git clone --depth 1 https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
+  git clone --depth 1 --branch "$LLAMA_VERSION" https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
 else
-  echo "==> Cloning llama.cpp..."
-  git clone --depth 1 https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
+  echo "==> Cloning llama.cpp $LLAMA_VERSION ..."
+  git clone --depth 1 --branch "$LLAMA_VERSION" https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
 fi
 
 # ── macOS ────────────────────────────────────────────────────────────────────

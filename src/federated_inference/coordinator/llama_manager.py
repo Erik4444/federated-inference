@@ -165,7 +165,7 @@ class LlamaManager:
         self._process = None
         self.state = CoordinatorState.IDLE
 
-    async def _wait_ready(self, timeout: float = 120.0) -> bool:
+    async def _wait_ready(self, timeout: float = 300.0) -> bool:
         host = self._settings.llama_server_host
         port = self._settings.llama_server_port
         loop = asyncio.get_event_loop()
