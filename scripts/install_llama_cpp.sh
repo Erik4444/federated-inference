@@ -153,13 +153,25 @@ else
   echo "    ✗ llama-server not found in build output"
 fi
 
-if [ -f "$LLAMA_DIR/build/bin/llama-rpc-server" ]; then
-  cp "$LLAMA_DIR/build/bin/llama-rpc-server" "$BINDIR/llama-rpc-server"
+# llama-rpc-server may be in build/bin/ or elsewhere — search broadly.
+RPC_BIN=$(find "$LLAMA_DIR/build" -name "llama-rpc-server" -type f 2>/dev/null | head -1)
+if [ -n "$RPC_BIN" ]; then
+  cp "$RPC_BIN" "$BINDIR/llama-rpc-server"
   chmod 755 "$BINDIR/llama-rpc-server"
-  echo "    ✓ installed llama-rpc-server"
+  echo "    ✓ installed llama-rpc-server (from $RPC_BIN)"
   ((INSTALLED_COUNT++))
 else
-  echo "    ℹ llama-rpc-server not found (RPC built into llama-server in this version)"
+  echo "    ✗ llama-rpc-server not found — rebuilding with explicit target..."
+  cmake --build "$LLAMA_DIR/build" --config Release --target llama-rpc-server -j"$JOBS" 2>/dev/null || true
+  RPC_BIN=$(find "$LLAMA_DIR/build" -name "llama-rpc-server" -type f 2>/dev/null | head -1)
+  if [ -n "$RPC_BIN" ]; then
+    cp "$RPC_BIN" "$BINDIR/llama-rpc-server"
+    chmod 755 "$BINDIR/llama-rpc-server"
+    echo "    ✓ installed llama-rpc-server"
+    ((INSTALLED_COUNT++))
+  else
+    echo "    ✗ llama-rpc-server could not be built — RPC workers will not function"
+  fi
 fi
 
 if [ "$INSTALLED_COUNT" -eq 0 ]; then
@@ -167,13 +179,9 @@ if [ "$INSTALLED_COUNT" -eq 0 ]; then
   exit 1
 fi
 
-# If llama-rpc-server doesn't exist but llama-server does, symlink it
-# (modern llama.cpp combines both into llama-server)
-if [ ! -f "$BINDIR/llama-rpc-server" ] && [ -f "$BINDIR/llama-server" ]; then
-  echo "==> Creating symlink: llama-rpc-server → llama-server"
-  ln -sf "$BINDIR/llama-server" "$BINDIR/llama-rpc-server"
-  chmod 755 "$BINDIR/llama-server"   # ensure target is executable
-fi
+# Do NOT create a llama-server symlink for llama-rpc-server.
+# Invoking llama-server as llama-rpc-server starts HTTP router mode,
+# which is incompatible with the GGML binary RPC protocol.
 
 echo ""
 echo "==> Installed to: $BINDIR"
