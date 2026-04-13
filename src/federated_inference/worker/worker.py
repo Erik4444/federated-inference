@@ -34,7 +34,7 @@ class Worker:
         grpc_port: int = 50051,
         grpc_host: str = "0.0.0.0",
         worker_id: str = "",
-        llama_rpc_binary: str = "llama-rpc-server",
+        llama_rpc_binary: str = "rpc-server",
         rpc_host: str = "0.0.0.0",
         config: WorkerConfig | None = None,
         discovery: bool = False,

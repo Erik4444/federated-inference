@@ -12,7 +12,7 @@ class WorkerConfig:
     grpc_host: str = "0.0.0.0"
     grpc_port: int = 50051
     rpc_host: str = "0.0.0.0"
-    llama_rpc_binary: str = "llama-rpc-server"
+    llama_rpc_binary: str = "rpc-server"
 
     @classmethod
     def from_file(cls, path: str | Path) -> "WorkerConfig":

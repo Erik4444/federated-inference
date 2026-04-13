@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class RPCManager:
     """Manages the lifecycle of a llama-rpc-server subprocess."""
 
-    def __init__(self, binary: str = "llama-rpc-server") -> None:
+    def __init__(self, binary: str = "rpc-server") -> None:
         self._binary = binary
         self._process: subprocess.Popen | None = None
         self._port: int | None = None
@@ -22,7 +22,7 @@ class RPCManager:
             logger.info("llama-rpc-server already running on port %d", self._port)
             return f"{host}:{self._port}"
 
-        cmd = [self._binary, "--host", host, "--port", str(port)]
+        cmd = [self._binary, "-H", host, "-p", str(port)]
         logger.info("Starting llama-rpc-server: %s", " ".join(cmd))
 
         self._process = subprocess.Popen(

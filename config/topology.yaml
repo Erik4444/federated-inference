@@ -6,7 +6,7 @@ coordinator:
   port: 8080
   llama_server_host: "127.0.0.1"  # llama-server binds here (coordinator-local only)
   llama_server_port: 8181
-  llama_server_binary: "llama-server"  # full path if not in $PATH
+  llama_server_binary: "llama-server"   # full path if not in $PATH
   health_check_interval_seconds: 10
   worker_timeout_seconds: 30
   min_healthy_workers: 1       # refuse to start until at least N workers are healthy
