@@ -2,7 +2,7 @@
 # Copy to model.yaml and adjust the model path.
 
 model:
-  path: "/models/llama-3-70b-instruct.Q4_K_M.gguf"  # path on the coordinator
+  path: "/Users/erik/Desktop/Projekte/federated-inference/models/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
   context_length: 4096
   n_gpu_layers: -1    # -1 = offload as many layers as possible to GPU/RPC workers
   batch_size: 512

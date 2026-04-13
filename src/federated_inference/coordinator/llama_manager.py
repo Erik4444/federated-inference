@@ -105,16 +105,22 @@ class LlamaManager:
                     f"{self._settings.llama_server_host}:{self._settings.llama_server_port}",
                 )
         else:
-            stderr_output = ""
+            stdout_output = stderr_output = ""
+            returncode = None
             if self._process is not None:
                 try:
-                    _, stderr_bytes = await asyncio.wait_for(
+                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
                         self._process.communicate(), timeout=5
                     )
+                    stdout_output = stdout_bytes.decode(errors="replace").strip()
                     stderr_output = stderr_bytes.decode(errors="replace").strip()
                 except asyncio.TimeoutError:
                     pass
-            logger.error("llama-server failed to start. stderr:\n%s", stderr_output)
+                returncode = self._process.returncode
+            logger.error(
+                "llama-server failed to start (exit code: %s).\nstdout:\n%s\nstderr:\n%s",
+                returncode, stdout_output or "(empty)", stderr_output or "(empty)",
+            )
             await self._stop_server()
 
     async def _stop_server(self) -> None:
