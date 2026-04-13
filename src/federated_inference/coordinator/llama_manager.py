@@ -33,11 +33,13 @@ class LlamaManager:
         model_config: ModelConfig,
         registry: WorkerRegistry,
         notify_all: Callable[[str, str], Awaitable[None]] | None = None,
+        restart_workers: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self._settings = settings
         self._model = model_config
         self._registry = registry
         self._notify_all = notify_all
+        self._restart_workers = restart_workers
         self._process: asyncio.subprocess.Process | None = None
         self.state = CoordinatorState.IDLE
         self._restart_event = asyncio.Event()
@@ -60,9 +62,14 @@ class LlamaManager:
 
             await self._start_server(active_addresses)
 
-            # If the server failed to reach READY state, back off and retry.
+            # If the server failed to reach READY state, recycle the RPC workers
+            # (their connection state may be broken) then back off and retry.
             if self.state != CoordinatorState.READY:
-                logger.info("llama-server did not reach READY, retrying in 10s...")
+                logger.info(
+                    "llama-server did not reach READY — recycling RPC workers and retrying in 10s..."
+                )
+                if self._restart_workers:
+                    await self._restart_workers()
                 await asyncio.sleep(10)
                 continue
 

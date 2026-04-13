@@ -76,6 +76,9 @@ else
   git clone --depth 1 --branch "$LLAMA_VERSION" https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
 fi
 
+# Always wipe the cmake build cache so a version switch is picked up cleanly.
+rm -rf "$LLAMA_DIR/build"
+
 # ── macOS ────────────────────────────────────────────────────────────────────
 if [ "$OS" = "Darwin" ]; then
   echo "==> Building for macOS (Metal acceleration)"

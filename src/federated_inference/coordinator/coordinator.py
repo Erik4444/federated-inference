@@ -53,6 +53,7 @@ class Coordinator:
         self.llama_manager = LlamaManager(
             settings, model_config, self.registry,
             notify_all=self._health_loop.notify_all_active,
+            restart_workers=self._restart_all_rpc_workers,
         )
 
         # Optional UDP discovery
@@ -82,6 +83,17 @@ class Coordinator:
             asyncio.create_task(self._health_loop.start_rpc_on_worker(entry.id))
         elif new_state in (WorkerState.ACTIVE, WorkerState.UNREACHABLE):
             self.llama_manager.request_restart()
+
+    async def _restart_all_rpc_workers(self) -> None:
+        """Stop and restart llama-rpc-server on every ACTIVE worker.
+
+        Called after llama-server fails to start so that broken RPC connections
+        are cleared before the next attempt.
+        """
+        for entry in self.registry.all():
+            logger.info("Recycling RPC on worker %s", entry.id)
+            await self._health_loop.stop_rpc_on_worker(entry.id)
+            await self._health_loop.start_rpc_on_worker(entry.id)
 
     async def _on_discovered_worker(self, worker_id: str) -> None:
         """Called when discovery sees a brand-new worker — kick off a health check."""
