@@ -66,13 +66,38 @@ class LlamaManager:
                 await asyncio.sleep(10)
                 continue
 
-            # Wait until a restart is requested (e.g. worker comes/goes)
+            # Wait until a restart is requested:
+            # - worker topology change (request_restart called externally)
+            # - llama-server process died (_monitor_process sets the event)
             self._restart_event.clear()
             await self._restart_event.wait()
 
-            logger.info("Worker topology changed, restarting llama-server...")
+            logger.info("Worker topology changed or process died, restarting llama-server...")
             self.state = CoordinatorState.RESTARTING
             await self._stop_server()
+
+    async def _drain_pipe(self, stream: asyncio.StreamReader) -> None:
+        """Read lines from a subprocess pipe and log them at INFO level."""
+        try:
+            while True:
+                line = await stream.readline()
+                if not line:
+                    break
+                logger.info("llama-server: %s", line.decode(errors="replace").rstrip())
+        except Exception:
+            pass
+
+    async def _monitor_process(self) -> None:
+        """Set restart_event when llama-server exits unexpectedly."""
+        if self._process is None:
+            return
+        await self._process.wait()
+        if self.state == CoordinatorState.READY:
+            logger.warning(
+                "llama-server exited unexpectedly (code %s), requesting restart",
+                self._process.returncode,
+            )
+            self._restart_event.set()
 
     async def _start_server(self, rpc_addresses: list[str]) -> None:
         self.state = CoordinatorState.STARTING
@@ -96,7 +121,11 @@ class LlamaManager:
             stderr=asyncio.subprocess.PIPE,
         )
 
-        # Wait for llama-server to be ready
+        # Drain stdout/stderr continuously so the pipe buffer never fills up.
+        # Logged at INFO so startup output is visible without --log-level DEBUG.
+        drain_stdout = asyncio.create_task(self._drain_pipe(self._process.stdout))
+        drain_stderr = asyncio.create_task(self._drain_pipe(self._process.stderr))
+
         if await self._wait_ready():
             self.state = CoordinatorState.READY
             logger.info(
@@ -104,6 +133,8 @@ class LlamaManager:
                 self._settings.llama_server_host,
                 self._settings.llama_server_port,
             )
+            # Monitor for unexpected crashes while READY.
+            asyncio.create_task(self._monitor_process())
             if self._notify_all:
                 await self._notify_all(
                     "inference_ready",
@@ -111,21 +142,15 @@ class LlamaManager:
                     f"{self._settings.llama_server_host}:{self._settings.llama_server_port}",
                 )
         else:
-            stdout_output = stderr_output = ""
-            returncode = None
-            if self._process is not None:
-                try:
-                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                        self._process.communicate(), timeout=5
-                    )
-                    stdout_output = stdout_bytes.decode(errors="replace").strip()
-                    stderr_output = stderr_bytes.decode(errors="replace").strip()
-                except asyncio.TimeoutError:
-                    pass
-                returncode = self._process.returncode
+            # Give drain tasks a moment to flush error output before cancelling.
+            await asyncio.sleep(0.5)
+            drain_stdout.cancel()
+            drain_stderr.cancel()
+            returncode = self._process.returncode if self._process else None
             logger.error(
-                "llama-server failed to start (exit code: %s).\nstdout:\n%s\nstderr:\n%s",
-                returncode, stdout_output or "(empty)", stderr_output or "(empty)",
+                "llama-server failed to start (exit code: %s). "
+                "Check output above for details.",
+                returncode,
             )
             await self._stop_server()
 
@@ -141,20 +166,27 @@ class LlamaManager:
         self.state = CoordinatorState.IDLE
 
     async def _wait_ready(self, timeout: float = 120.0) -> bool:
-        import time
-        import socket as sock
-
         host = self._settings.llama_server_host
         port = self._settings.llama_server_port
-        deadline = asyncio.get_event_loop().time() + timeout
+        loop = asyncio.get_event_loop()
+        deadline = loop.time() + timeout
 
-        while asyncio.get_event_loop().time() < deadline:
+        while loop.time() < deadline:
             if self._process is not None and self._process.returncode is not None:
                 return False
             try:
-                with sock.create_connection((host, port), timeout=1):
-                    return True
-            except OSError:
+                # Non-blocking connect check via executor so drain tasks keep running.
+                _, writer = await asyncio.wait_for(
+                    asyncio.open_connection(host, port),
+                    timeout=1.0,
+                )
+                writer.close()
+                try:
+                    await writer.wait_closed()
+                except Exception:
+                    pass
+                return True
+            except (OSError, asyncio.TimeoutError):
                 await asyncio.sleep(1)
         return False
 
