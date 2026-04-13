@@ -27,27 +27,22 @@ class RPCManager:
 
         self._process = subprocess.Popen(
             cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         self._port = port
 
         check_host = "127.0.0.1" if host == "0.0.0.0" else host
         if not self._wait_for_port(check_host, port, timeout=30):
-            # Capture output before killing so we can diagnose failures
-            stdout_tail = stderr_tail = ""
-            try:
-                out, err = self._process.communicate(timeout=2)
-                stdout_tail = out.decode(errors="replace").strip()[-500:]
-                stderr_tail = err.decode(errors="replace").strip()[-500:]
-            except Exception:
-                pass
             self.stop(force=True)
+            # Retry once with captured output to diagnose the failure
+            diag_proc = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5,
+            )
+            stderr_tail = diag_proc.stderr.decode(errors="replace").strip()[-500:]
             msg = f"llama-rpc-server did not start in time on port {port}"
             if stderr_tail:
                 msg += f"\nstderr: {stderr_tail}"
-            if stdout_tail:
-                msg += f"\nstdout: {stdout_tail}"
             raise RuntimeError(msg)
 
         logger.info("llama-rpc-server listening on %s:%d", host, port)
