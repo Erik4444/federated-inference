@@ -60,6 +60,12 @@ class LlamaManager:
 
             await self._start_server(active_addresses)
 
+            # If the server failed to reach READY state, back off and retry.
+            if self.state != CoordinatorState.READY:
+                logger.info("llama-server did not reach READY, retrying in 10s...")
+                await asyncio.sleep(10)
+                continue
+
             # Wait until a restart is requested (e.g. worker comes/goes)
             self._restart_event.clear()
             await self._restart_event.wait()

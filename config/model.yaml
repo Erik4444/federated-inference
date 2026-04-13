@@ -11,5 +11,6 @@ model:
 # Extra flags passed verbatim to llama-server
 llama_server_extra_flags:
   - "--flash-attn"
+  - "on"
   # - "--no-mmap"
   # - "--mlock"
