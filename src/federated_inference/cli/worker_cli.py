@@ -24,8 +24,9 @@ def main(log_level: str) -> None:
 @click.option("--grpc-host", default="0.0.0.0", show_default=True)
 @click.option("--worker-id", default="", help="Stable worker ID (defaults to hostname)")
 @click.option("--rpc-host", default="0.0.0.0", show_default=True,
-              help="Bind address for llama-rpc-server")
-@click.option("--llama-rpc-binary", default="llama-rpc-server", show_default=True)
+              help="Bind address for RPC server")
+@click.option("--llama-rpc-binary", default="llama-rpc-server", show_default=True,
+              help="RPC server binary (llama-rpc-server or llama-server)")
 @click.option("--config", "config_file", default=None, type=click.Path(exists=True),
               help="Optional YAML worker config file")
 def start(

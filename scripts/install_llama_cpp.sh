@@ -8,7 +8,6 @@
 
 set -euo pipefail
 
-PREFIX="${1:-/usr/local}"
 LLAMA_VERSION="b5622"   # pin to a known-good release; update as needed
 
 ARCH=$(uname -m)
@@ -21,6 +20,13 @@ IS_TERMUX=false
 if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux" ]; then
   IS_TERMUX=true
   echo "==> Termux environment detected"
+fi
+
+# On Termux /usr/local doesn't exist — default to the Termux prefix
+if $IS_TERMUX; then
+  PREFIX="${1:-/data/data/com.termux/files/usr}"
+else
+  PREFIX="${1:-/usr/local}"
 fi
 
 # ── Install build deps ───────────────────────────────────────────────────────
@@ -38,7 +44,12 @@ elif command -v dnf &>/dev/null; then
 fi
 
 # ── Clone or update ──────────────────────────────────────────────────────────
-LLAMA_DIR="/tmp/llama.cpp"
+# On Android/Termux /tmp is not writable — use $TMPDIR or $HOME instead
+if $IS_TERMUX; then
+  LLAMA_DIR="${TMPDIR:-$HOME}/llama.cpp"
+else
+  LLAMA_DIR="/tmp/llama.cpp"
+fi
 if [ -d "$LLAMA_DIR/.git" ]; then
   echo "==> Updating existing llama.cpp clone in $LLAMA_DIR ..."
   git -C "$LLAMA_DIR" pull --ff-only
@@ -60,11 +71,19 @@ if [ "$OS" = "Darwin" ]; then
     -DGGML_RPC=ON \
     -DCMAKE_BUILD_TYPE=Release
   cmake --build "$LLAMA_DIR/build" --config Release \
-    -j"$(sysctl -n hw.logicalcpu)" \
-    --target llama-server llama-rpc-server
+    -j"$(sysctl -n hw.logicalcpu)"
+
   mkdir -p "$PREFIX/bin"
-  install -m755 "$LLAMA_DIR/build/bin/llama-server" "$PREFIX/bin/"
-  install -m755 "$LLAMA_DIR/build/bin/llama-rpc-server" "$PREFIX/bin/"
+  if [ -f "$LLAMA_DIR/build/bin/llama-server" ]; then
+    install -m755 "$LLAMA_DIR/build/bin/llama-server" "$PREFIX/bin/"
+    echo "    ✓ installed llama-server"
+  fi
+  if [ -f "$LLAMA_DIR/build/bin/llama-rpc-server" ]; then
+    install -m755 "$LLAMA_DIR/build/bin/llama-rpc-server" "$PREFIX/bin/"
+    echo "    ✓ installed llama-rpc-server"
+  else
+    echo "    ℹ llama-rpc-server not found (RPC built into llama-server)"
+  fi
   echo "==> Done (macOS Metal)"
   exit 0
 fi
@@ -100,22 +119,44 @@ fi
 JOBS=$(nproc 2>/dev/null || echo 2)
 echo "==> Building with ${JOBS} jobs (flags: ${CMAKE_FLAGS[*]})"
 cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" "${CMAKE_FLAGS[@]}"
-cmake --build "$LLAMA_DIR/build" --config Release -j"$JOBS" \
-  --target llama-server llama-rpc-server
+cmake --build "$LLAMA_DIR/build" --config Release -j"$JOBS"
 
 # Install
 BINDIR="$PREFIX/bin"
-if $IS_TERMUX; then
-  BINDIR="$PREFIX/bin"
-fi
 mkdir -p "$BINDIR"
-install -m755 "$LLAMA_DIR/build/bin/llama-server" "$BINDIR/"
-install -m755 "$LLAMA_DIR/build/bin/llama-rpc-server" "$BINDIR/"
+
+INSTALLED_COUNT=0
+
+if [ -f "$LLAMA_DIR/build/bin/llama-server" ]; then
+  install -m755 "$LLAMA_DIR/build/bin/llama-server" "$BINDIR/"
+  echo "    ✓ installed llama-server"
+  ((INSTALLED_COUNT++))
+else
+  echo "    ✗ llama-server not found in build output"
+fi
+
+if [ -f "$LLAMA_DIR/build/bin/llama-rpc-server" ]; then
+  install -m755 "$LLAMA_DIR/build/bin/llama-rpc-server" "$BINDIR/"
+  echo "    ✓ installed llama-rpc-server"
+  ((INSTALLED_COUNT++))
+else
+  echo "    ℹ llama-rpc-server not found (RPC built into llama-server in this version)"
+fi
+
+if [ "$INSTALLED_COUNT" -eq 0 ]; then
+  echo "ERROR: No binaries were installed. Build may have failed."
+  exit 1
+fi
+
+# If llama-rpc-server doesn't exist but llama-server does, symlink it
+# (modern llama.cpp combines both into llama-server)
+if [ ! -f "$BINDIR/llama-rpc-server" ] && [ -f "$BINDIR/llama-server" ]; then
+  echo "==> Creating symlink: llama-rpc-server → llama-server"
+  ln -sf llama-server "$BINDIR/llama-rpc-server"
+fi
 
 echo ""
-echo "==> Installed:"
-echo "    $BINDIR/llama-server"
-echo "    $BINDIR/llama-rpc-server"
-echo ""
+echo "==> Installed to: $BINDIR"
 echo "==> Verify with:"
+echo "    llama-server --version"
 echo "    llama-rpc-server --version"
