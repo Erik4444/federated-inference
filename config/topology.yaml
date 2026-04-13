@@ -31,7 +31,7 @@ workers:
     grpc_port: 50051
     rpc_port: 8765
     tags: ["arm64", "termux"]
-    enabled: false            # set to true once the device is set up
+    enabled: true            # set to true once the device is set up
     mem_limit_mb: 2048        # cap at 2 GB — leave room for Android OS
 
  #- id: "jetson-orin"

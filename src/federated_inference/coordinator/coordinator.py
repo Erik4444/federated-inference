@@ -73,7 +73,11 @@ class Coordinator:
         )
 
     def _on_worker_state_change(self, entry, new_state: WorkerState) -> None:
-        if new_state in (WorkerState.ACTIVE, WorkerState.UNREACHABLE):
+        if new_state == WorkerState.HEALTHY:
+            # Worker just came online (fresh start or recovery) — start its RPC server.
+            # Using create_task because state-change callbacks are synchronous.
+            asyncio.create_task(self._health_loop.start_rpc_on_worker(entry.id))
+        elif new_state in (WorkerState.ACTIVE, WorkerState.UNREACHABLE):
             self.llama_manager.request_restart()
 
     async def _on_discovered_worker(self, worker_id: str) -> None:
@@ -117,21 +121,7 @@ class Coordinator:
             llama_task.cancel()
 
     async def _run_llama_pipeline(self) -> None:
-        """Wait for enough workers to be ACTIVE, then start llama-server."""
-        settings = self.topology.coordinator
-        # Give the health loop a moment to connect to workers
-        await asyncio.sleep(settings.health_check_interval_seconds * 1.5)
-        # Start RPC servers on HEALTHY workers
-        healthy = self.registry.workers_in_state(WorkerState.HEALTHY)
-        if len(healthy) < settings.min_healthy_workers:
-            logger.warning(
-                "Only %d healthy workers, need %d. Waiting...",
-                len(healthy),
-                settings.min_healthy_workers,
-            )
-        for entry in healthy:
-            await self._health_loop.start_rpc_on_worker(entry.id)
-        # Hand off to LlamaManager
+        """Hand off to LlamaManager — workers are started reactively via state changes."""
         await self.llama_manager.run()
 
     async def stop(self) -> None:

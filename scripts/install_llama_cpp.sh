@@ -129,7 +129,8 @@ mkdir -p "$BINDIR"
 INSTALLED_COUNT=0
 
 if [ -f "$LLAMA_DIR/build/bin/llama-server" ]; then
-  install -m755 "$LLAMA_DIR/build/bin/llama-server" "$BINDIR/"
+  cp "$LLAMA_DIR/build/bin/llama-server" "$BINDIR/llama-server"
+  chmod 755 "$BINDIR/llama-server"
   echo "    ✓ installed llama-server"
   ((INSTALLED_COUNT++))
 else
@@ -137,7 +138,8 @@ else
 fi
 
 if [ -f "$LLAMA_DIR/build/bin/llama-rpc-server" ]; then
-  install -m755 "$LLAMA_DIR/build/bin/llama-rpc-server" "$BINDIR/"
+  cp "$LLAMA_DIR/build/bin/llama-rpc-server" "$BINDIR/llama-rpc-server"
+  chmod 755 "$BINDIR/llama-rpc-server"
   echo "    ✓ installed llama-rpc-server"
   ((INSTALLED_COUNT++))
 else
@@ -153,7 +155,8 @@ fi
 # (modern llama.cpp combines both into llama-server)
 if [ ! -f "$BINDIR/llama-rpc-server" ] && [ -f "$BINDIR/llama-server" ]; then
   echo "==> Creating symlink: llama-rpc-server → llama-server"
-  ln -sf llama-server "$BINDIR/llama-rpc-server"
+  ln -sf "$BINDIR/llama-server" "$BINDIR/llama-rpc-server"
+  chmod 755 "$BINDIR/llama-server"   # ensure target is executable
 fi
 
 echo ""
