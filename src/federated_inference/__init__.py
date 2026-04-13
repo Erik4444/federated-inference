@@ -45,11 +45,12 @@ CLI
     federated-worker start --grpc-port 50051
 """
 
-from federated_inference.coordinator.coordinator import Coordinator
-from federated_inference.coordinator.config import TopologyConfig, ModelConfig
-from federated_inference.worker.worker import Worker
-from federated_inference.worker.config import WorkerConfig
-from federated_inference.client.client import FederatedInferenceClient
+from __future__ import annotations
+
+# Imports are deferred so that optional dependencies (uvicorn, fastapi, openai)
+# are only required when the relevant class is actually used.  This lets the
+# worker run on minimal installs (e.g. Android/Termux) without the coordinator
+# or client extras being present.
 
 __all__ = [
     "Coordinator",
@@ -59,3 +60,27 @@ __all__ = [
     "WorkerConfig",
     "FederatedInferenceClient",
 ]
+
+
+def __getattr__(name: str):
+    if name in ("Coordinator", "TopologyConfig", "ModelConfig"):
+        from federated_inference.coordinator import coordinator as _coord_mod
+        from federated_inference.coordinator import config as _coord_cfg
+        globals()["Coordinator"] = _coord_mod.Coordinator
+        globals()["TopologyConfig"] = _coord_cfg.TopologyConfig
+        globals()["ModelConfig"] = _coord_cfg.ModelConfig
+        return globals()[name]
+
+    if name in ("Worker", "WorkerConfig"):
+        from federated_inference.worker.worker import Worker as _Worker
+        from federated_inference.worker.config import WorkerConfig as _WorkerConfig
+        globals()["Worker"] = _Worker
+        globals()["WorkerConfig"] = _WorkerConfig
+        return globals()[name]
+
+    if name == "FederatedInferenceClient":
+        from federated_inference.client.client import FederatedInferenceClient as _Client
+        globals()["FederatedInferenceClient"] = _Client
+        return _Client
+
+    raise AttributeError(f"module 'federated_inference' has no attribute {name!r}")
