@@ -29,6 +29,13 @@ def main(log_level: str) -> None:
               help="RPC server binary (llama-rpc-server or llama-server)")
 @click.option("--config", "config_file", default=None, type=click.Path(exists=True),
               help="Optional YAML worker config file")
+@click.option("--discover/--no-discover", default=False, show_default=True,
+              help="Broadcast presence via UDP so the coordinator can find this worker automatically")
+@click.option("--discovery-port", default=50052, show_default=True,
+              help="UDP port for discovery broadcast (must match coordinator)")
+@click.option("--rpc-port", default=8765, show_default=True,
+              help="Port for llama-rpc-server (included in discovery payload)")
+@click.option("--tags", default="", help="Comma-separated tags, e.g. arm64,termux")
 def start(
     grpc_port: int,
     grpc_host: str,
@@ -36,9 +43,15 @@ def start(
     rpc_host: str,
     llama_rpc_binary: str,
     config_file: str | None,
+    discover: bool,
+    discovery_port: int,
+    rpc_port: int,
+    tags: str,
 ) -> None:
     """Start the worker gRPC server."""
     from federated_inference.worker.worker import Worker
+
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
 
     if config_file:
         worker = Worker.from_config(config_file)
@@ -49,6 +62,10 @@ def start(
             worker_id=worker_id,
             rpc_host=rpc_host,
             llama_rpc_binary=llama_rpc_binary,
+            discovery=discover,
+            discovery_port=discovery_port,
+            rpc_port=rpc_port,
+            tags=tag_list,
         )
 
     try:

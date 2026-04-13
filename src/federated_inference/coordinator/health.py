@@ -92,6 +92,10 @@ class HealthLoop:
             logger.warning("HealthCheck failed for %s: %s", worker_id, e.details() if hasattr(e, 'details') else e)
             self._registry.transition(worker_id, WorkerState.UNREACHABLE)
 
+    async def check_worker_now(self, worker_id: str) -> None:
+        """Immediately health-check a worker (e.g. right after discovery)."""
+        await self._check_worker(worker_id)
+
     async def start_rpc_on_worker(self, worker_id: str) -> bool:
         """Ask a worker to start its llama-rpc-server. Returns True on success."""
         entry = self._registry.get(worker_id)

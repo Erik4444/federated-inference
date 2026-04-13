@@ -76,6 +76,10 @@ class Coordinator:
         if new_state in (WorkerState.ACTIVE, WorkerState.UNREACHABLE):
             self.llama_manager.request_restart()
 
+    async def _on_discovered_worker(self, worker_id: str) -> None:
+        """Called when discovery sees a brand-new worker — kick off a health check."""
+        await self._health_loop.check_worker_now(worker_id)
+
     async def start(self) -> None:
         """Start coordinator services and serve the REST API. Blocks until stopped."""
         from federated_inference.coordinator.api import build_app
@@ -87,6 +91,10 @@ class Coordinator:
         llama_task = asyncio.create_task(self._run_llama_pipeline())
         # Start health loop
         self._health_loop.start()
+        # Start discovery listener if enabled
+        if self._discovery:
+            self._discovery.start()
+            logger.info("Discovery enabled on UDP port %d", settings.discovery_port)
 
         config = uvicorn.Config(
             app,
@@ -128,6 +136,8 @@ class Coordinator:
 
     async def stop(self) -> None:
         logger.info("Shutting down coordinator...")
+        if self._discovery:
+            await self._discovery.stop()
         await self._health_loop.stop()
         for entry in self.registry.all():
             await self._health_loop.stop_rpc_on_worker(entry.id)

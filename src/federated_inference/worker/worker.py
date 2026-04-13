@@ -37,6 +37,10 @@ class Worker:
         llama_rpc_binary: str = "llama-rpc-server",
         rpc_host: str = "0.0.0.0",
         config: WorkerConfig | None = None,
+        discovery: bool = False,
+        discovery_port: int = 50052,
+        rpc_port: int = 8765,
+        tags: list[str] | None = None,
     ) -> None:
         if config is not None:
             self._config = config
@@ -53,6 +57,17 @@ class Worker:
 
         self._rpc_manager = RPCManager(binary=self._config.llama_rpc_binary)
         self._server: grpc.Server | None = None
+
+        self._broadcaster = None
+        if discovery:
+            from federated_inference.worker.discovery import DiscoveryBroadcaster
+            self._broadcaster = DiscoveryBroadcaster(
+                worker_id=self._config.worker_id,
+                grpc_port=self._config.grpc_port,
+                rpc_port=rpc_port,
+                tags=tags or [],
+                discovery_port=discovery_port,
+            )
 
     @classmethod
     def from_config(cls, path: str) -> "Worker":
@@ -71,11 +86,15 @@ class Worker:
             self._config.worker_id,
             address,
         )
+        if self._broadcaster:
+            self._broadcaster.start()
         # Run until server is stopped
         self._server.wait_for_termination()
 
     async def stop(self) -> None:
         """Gracefully stop the worker."""
+        if self._broadcaster:
+            await self._broadcaster.stop()
         await self._rpc_manager.stop()
         if self._server is not None:
             self._server.stop(grace=5)

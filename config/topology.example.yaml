@@ -11,6 +11,11 @@ coordinator:
   worker_timeout_seconds: 30
   min_healthy_workers: 1       # refuse to start until at least N workers are healthy
 
+  # Auto-discovery: workers broadcast their presence via UDP so you don't
+  # need to list their IPs below.  Enable here AND start workers with --discover.
+  discovery: false             # set to true to enable
+  discovery_port: 50052        # must match workers' --discovery-port
+
 workers:
   # ── Load balancing note ───────────────────────────────────────────────────
   # llama.cpp distributes model layers across workers *proportional to their

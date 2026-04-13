@@ -20,15 +20,35 @@ def main(log_level: str) -> None:
 
 
 @main.command()
-@click.option("--topology", required=True, type=click.Path(exists=True),
-              help="Path to topology.yaml")
+@click.option("--topology", default=None, type=click.Path(exists=True),
+              help="Path to topology.yaml (optional when --discover is used)")
 @click.option("--model", required=True, type=click.Path(exists=True),
               help="Path to model.yaml")
-def start(topology: str, model: str) -> None:
+@click.option("--discover/--no-discover", default=False, show_default=True,
+              help="Auto-discover workers via UDP broadcast (no topology.yaml needed)")
+@click.option("--discovery-port", default=50052, show_default=True,
+              help="UDP port to listen on for worker announcements")
+def start(topology: str | None, model: str, discover: bool, discovery_port: int) -> None:
     """Start the coordinator (REST API + worker management)."""
     from federated_inference.coordinator.coordinator import Coordinator
+    from federated_inference.coordinator.config import (
+        TopologyConfig, CoordinatorSettings, ModelConfig
+    )
 
-    coordinator = Coordinator.from_config(topology, model)
+    if topology:
+        topo = TopologyConfig.from_file(topology)
+    else:
+        topo = TopologyConfig()   # empty: no static workers
+
+    if discover:
+        topo.coordinator.discovery = True
+        topo.coordinator.discovery_port = discovery_port
+
+    if not topology and not discover:
+        raise click.UsageError("Provide --topology and/or --discover.")
+
+    model_config = ModelConfig.from_file(model)
+    coordinator = Coordinator(topology=topo, model_config=model_config)
     try:
         asyncio.run(coordinator.start())
     except KeyboardInterrupt:
