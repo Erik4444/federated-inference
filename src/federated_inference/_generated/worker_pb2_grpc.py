@@ -61,6 +61,11 @@ class WorkerServiceStub(object):
                 request_serializer=worker__pb2.MetricsRequest.SerializeToString,
                 response_deserializer=worker__pb2.MetricsSnapshot.FromString,
                 _registered_method=True)
+        self.Notify = channel.unary_unary(
+                '/federated_inference.WorkerService/Notify',
+                request_serializer=worker__pb2.NotifyRequest.SerializeToString,
+                response_deserializer=worker__pb2.NotifyResponse.FromString,
+                _registered_method=True)
 
 
 class WorkerServiceServicer(object):
@@ -103,6 +108,13 @@ class WorkerServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Notify(self, request, context):
+        """Coordinator sends a status notification to the worker
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_WorkerServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -130,6 +142,11 @@ def add_WorkerServiceServicer_to_server(servicer, server):
                     servicer.StreamMetrics,
                     request_deserializer=worker__pb2.MetricsRequest.FromString,
                     response_serializer=worker__pb2.MetricsSnapshot.SerializeToString,
+            ),
+            'Notify': grpc.unary_unary_rpc_method_handler(
+                    servicer.Notify,
+                    request_deserializer=worker__pb2.NotifyRequest.FromString,
+                    response_serializer=worker__pb2.NotifyResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -269,6 +286,33 @@ class WorkerService(object):
             '/federated_inference.WorkerService/StreamMetrics',
             worker__pb2.MetricsRequest.SerializeToString,
             worker__pb2.MetricsSnapshot.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Notify(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/federated_inference.WorkerService/Notify',
+            worker__pb2.NotifyRequest.SerializeToString,
+            worker__pb2.NotifyResponse.FromString,
             options,
             channel_credentials,
             insecure,

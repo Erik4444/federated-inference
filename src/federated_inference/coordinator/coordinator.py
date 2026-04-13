@@ -46,11 +46,14 @@ class Coordinator:
         llama_base = f"http://{settings.llama_server_host}:{settings.llama_server_port}"
         self.proxy = LlamaProxy(llama_base)
 
-        # LlamaManager
-        self.llama_manager = LlamaManager(settings, model_config, self.registry)
-
         # Health loop
         self._health_loop = HealthLoop(self.registry, settings)
+
+        # LlamaManager
+        self.llama_manager = LlamaManager(
+            settings, model_config, self.registry,
+            notify_all=self._health_loop.notify_all_active,
+        )
 
         # Optional UDP discovery
         self._discovery = None

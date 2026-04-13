@@ -95,6 +95,12 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
         finally:
             loop.close()
 
+    # ── Notify ───────────────────────────────────────────────────────────────
+
+    def Notify(self, request, context):
+        logger.info("[Coordinator] %s: %s", request.event, request.message)
+        return worker_pb2.NotifyResponse(acknowledged=True)
+
     # ── StreamMetrics ────────────────────────────────────────────────────────
 
     def StreamMetrics(self, request, context):

@@ -19,6 +19,9 @@ service WorkerService {
 
   // Real-time streaming of device stats (optional, for dashboards)
   rpc StreamMetrics(MetricsRequest) returns (stream MetricsSnapshot);
+
+  // Coordinator sends a status notification to the worker
+  rpc Notify(NotifyRequest) returns (NotifyResponse);
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -77,6 +80,15 @@ message StopRPCRequest {
 message StopRPCResponse {
   bool   success = 1;
   string error   = 2;
+}
+
+message NotifyRequest {
+  string event   = 1; // e.g. "worker_connected", "inference_ready"
+  string message = 2; // human-readable description
+}
+
+message NotifyResponse {
+  bool acknowledged = 1;
 }
 
 message MetricsRequest {
