@@ -23,8 +23,6 @@ class RPCManager:
             return f"{host}:{self._port}"
 
         cmd = [self._binary, "--host", host, "--port", str(port)]
-        if mem_limit_mb > 0:
-            cmd.extend(["--mem", str(mem_limit_mb)])
         logger.info("Starting llama-rpc-server: %s", " ".join(cmd))
 
         # DEVNULL prevents pipe-buffer blocking (llama-rpc-server writes a lot
