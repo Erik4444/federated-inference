@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from enum import Enum, auto
 
@@ -9,6 +10,15 @@ from federated_inference.coordinator.config import CoordinatorSettings, ModelCon
 from federated_inference.coordinator.registry import WorkerRegistry, WorkerState
 
 logger = logging.getLogger(__name__)
+
+
+def _close_inherited_fds() -> None:
+    """Close all file descriptors > 2 after fork.
+
+    Prevents the coordinator's gRPC sockets from leaking into llama-server,
+    which would cause gRPC interference and RPC hangs.
+    """
+    os.closerange(3, 65536)
 
 
 class CoordinatorState(Enum):
@@ -90,7 +100,11 @@ class LlamaManager:
                 line = await stream.readline()
                 if not line:
                     break
-                logger.info("llama-server: %s", line.decode(errors="replace").rstrip())
+                text = line.decode(errors="replace").rstrip()
+                # Suppress gRPC internal noise about inherited file descriptors.
+                if "FD from fork parent still in poll list" in text:
+                    continue
+                logger.info("llama-server: %s", text)
         except Exception:
             pass
 
@@ -126,6 +140,7 @@ class LlamaManager:
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            preexec_fn=_close_inherited_fds,
         )
 
         # Drain stdout/stderr continuously so the pipe buffer never fills up.

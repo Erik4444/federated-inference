@@ -62,38 +62,26 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
     # ── StartRPC ─────────────────────────────────────────────────────────────
 
     def StartRPC(self, request, context):
-        import asyncio
-
-        loop = asyncio.new_event_loop()
         try:
-            address = loop.run_until_complete(
-                self._rpc.start(
-                    host=self._config.rpc_host,
-                    port=request.port,
-                    mem_limit_mb=request.mem_limit_mb,
-                )
+            address = self._rpc.start(
+                host=self._config.rpc_host,
+                port=request.port,
+                mem_limit_mb=request.mem_limit_mb,
             )
             return worker_pb2.StartRPCResponse(success=True, address=address)
         except Exception as e:
             logger.error("Failed to start llama-rpc-server: %s", e)
             return worker_pb2.StartRPCResponse(success=False, error=str(e))
-        finally:
-            loop.close()
 
     # ── StopRPC ──────────────────────────────────────────────────────────────
 
     def StopRPC(self, request, context):
-        import asyncio
-
-        loop = asyncio.new_event_loop()
         try:
-            loop.run_until_complete(self._rpc.stop(force=request.force))
+            self._rpc.stop(force=request.force)
             return worker_pb2.StopRPCResponse(success=True)
         except Exception as e:
             logger.error("Failed to stop llama-rpc-server: %s", e)
             return worker_pb2.StopRPCResponse(success=False, error=str(e))
-        finally:
-            loop.close()
 
     # ── Notify ───────────────────────────────────────────────────────────────
 
