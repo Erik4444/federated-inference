@@ -5,11 +5,29 @@ import shutil
 import subprocess
 
 
+def _probe_ram_procfs() -> tuple[int, int]:
+    """Fallback for Linux/Android: read /proc/meminfo directly."""
+    try:
+        info: dict[str, int] = {}
+        with open("/proc/meminfo") as f:
+            for line in f:
+                key, _, val = line.partition(":")
+                info[key.strip()] = int(val.strip().split()[0]) * 1024
+        total = info.get("MemTotal", 0)
+        available = info.get("MemAvailable", info.get("MemFree", 0))
+        return total, available
+    except Exception:
+        return 0, 0
+
+
 def probe_ram() -> tuple[int, int]:
-    """Return (total_bytes, free_bytes) using psutil (cross-platform)."""
-    import psutil
-    vm = psutil.virtual_memory()
-    return vm.total, vm.available
+    """Return (total_bytes, free_bytes). Uses psutil when available, falls back to /proc/meminfo."""
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        return vm.total, vm.available
+    except Exception:
+        return _probe_ram_procfs()
 
 
 def probe_vram() -> tuple[int, int]:

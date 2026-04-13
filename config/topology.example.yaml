@@ -12,12 +12,25 @@ coordinator:
   min_healthy_workers: 1       # refuse to start until at least N workers are healthy
 
 workers:
+  # ── Load balancing note ───────────────────────────────────────────────────
+  # llama.cpp distributes model layers across workers *proportional to their
+  # reported available memory*.  No manual tuning is required for basic use:
+  # a workstation with 64 GB automatically gets far more layers than a phone
+  # with 4 GB.
+  #
+  # mem_limit_mb (optional):
+  #   0   → coordinator auto-computes from the worker's free RAM/VRAM
+  #         at the moment it issues StartRPC (recommended default).
+  #   N>0 → hard cap in MiB; useful to leave headroom or throttle a device.
+  # ─────────────────────────────────────────────────────────────────────────
+
   - id: "pi-node-1"
     host: "192.168.1.101"
     grpc_port: 50051
     rpc_port: 8765
     tags: ["arm64", "cpu-only"]
     enabled: true
+    mem_limit_mb: 0           # auto
 
   - id: "x86-workstation"
     host: "192.168.1.102"
@@ -25,13 +38,15 @@ workers:
     rpc_port: 8765
     tags: ["x86_64", "nvidia-gpu"]
     enabled: true
+    mem_limit_mb: 0           # auto — uses VRAM if available, else RAM
 
   - id: "android-phone"
-    host: "192.168.1.103"     # Android device running Termux with federated-worker
+    host: "192.168.1.103"     # WLAN IP of the Android device (check with: ip addr show wlan0)
     grpc_port: 50051
     rpc_port: 8765
     tags: ["arm64", "termux"]
     enabled: false            # set to true once the device is set up
+    mem_limit_mb: 2048        # cap at 2 GB — leave room for Android OS
 
   - id: "jetson-orin"
     host: "192.168.1.104"
@@ -39,3 +54,4 @@ workers:
     rpc_port: 8765
     tags: ["arm64", "cuda"]
     enabled: true
+    mem_limit_mb: 0           # auto

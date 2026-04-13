@@ -32,6 +32,27 @@ class WorkerEntry:
     def id(self) -> str:
         return self.node.id
 
+    def effective_mem_limit_mb(self, headroom_fraction: float = 0.15) -> int:
+        """Memory cap (MiB) to pass to llama-rpc-server on this worker.
+
+        Priority:
+        1. Explicit ``mem_limit_mb`` in topology config (if > 0)
+        2. Auto: VRAM if available, else RAM — minus ``headroom_fraction``
+           to leave room for the OS and other processes.
+        Returns 0 if no device info is available yet (no cap).
+        """
+        if self.node.mem_limit_mb > 0:
+            return self.node.mem_limit_mb
+
+        vram = self.device_info.get("free_vram_bytes", 0)
+        ram = self.device_info.get("free_ram_bytes", 0)
+        available_bytes = vram if vram > 0 else ram
+        if available_bytes <= 0:
+            return 0
+
+        usable = int(available_bytes * (1.0 - headroom_fraction))
+        return max(1, usable // (1024 * 1024))
+
 
 class WorkerRegistry:
     def __init__(self) -> None:

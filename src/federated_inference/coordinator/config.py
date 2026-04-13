@@ -14,6 +14,11 @@ class WorkerNode(BaseModel):
     rpc_port: int = 8765
     tags: list[str] = Field(default_factory=list)
     enabled: bool = True
+    # Optional memory cap for llama-rpc-server on this worker (MiB).
+    # 0 = auto: coordinator derives this from the worker's reported free
+    # RAM/VRAM at the time it issues StartRPC.  Set explicitly to reserve
+    # headroom or to limit a weak device (e.g. mem_limit_mb: 2048).
+    mem_limit_mb: int = 0
 
 
 class CoordinatorSettings(BaseModel):

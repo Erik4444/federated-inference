@@ -105,11 +105,24 @@ class HealthLoop:
             self._channels[address] = grpc.insecure_channel(address)
 
         stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
+        mem_limit_mb = entry.effective_mem_limit_mb()
+        if mem_limit_mb > 0:
+            logger.info(
+                "Worker %s: using mem_limit_mb=%d (free_ram=%s MiB, free_vram=%s MiB)",
+                worker_id,
+                mem_limit_mb,
+                entry.device_info.get("free_ram_bytes", 0) // (1024 * 1024),
+                entry.device_info.get("free_vram_bytes", 0) // (1024 * 1024),
+            )
+
         try:
             response = await asyncio.get_event_loop().run_in_executor(
                 None,
                 lambda: stub.StartRPC(
-                    worker_pb2.StartRPCRequest(port=entry.node.rpc_port),
+                    worker_pb2.StartRPCRequest(
+                        port=entry.node.rpc_port,
+                        mem_limit_mb=mem_limit_mb,
+                    ),
                     timeout=60,
                 ),
             )
