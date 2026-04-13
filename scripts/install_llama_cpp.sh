@@ -8,7 +8,7 @@
 
 set -euo pipefail
 
-LLAMA_VERSION="b5622"   # pin to a known-good release; update as needed
+LLAMA_VERSION="${LLAMA_VERSION:-latest}"   # override with: LLAMA_VERSION=b5622 bash install_llama_cpp.sh
 
 ARCH=$(uname -m)
 OS=$(uname -s)
@@ -51,8 +51,20 @@ if $IS_TERMUX; then
 else
   LLAMA_DIR="/tmp/llama.cpp"
 fi
+# Resolve "latest" to the actual newest release tag
+if [ "$LLAMA_VERSION" = "latest" ]; then
+  echo "==> Fetching latest llama.cpp release tag..."
+  LLAMA_VERSION=$(curl -fsSL "https://api.github.com/repos/ggerganov/llama.cpp/releases/latest" \
+    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": *"\([^"]*\)".*/\1/')
+  if [ -z "$LLAMA_VERSION" ]; then
+    echo "ERROR: Could not determine latest release tag. Set LLAMA_VERSION manually."
+    exit 1
+  fi
+  echo "==> Latest release: $LLAMA_VERSION"
+fi
+
 if [ -d "$LLAMA_DIR/.git" ]; then
-  echo "==> Updating existing llama.cpp clone in $LLAMA_DIR ..."
+  echo "==> Switching existing clone to $LLAMA_VERSION ..."
   git -C "$LLAMA_DIR" fetch --depth 1 origin tag "$LLAMA_VERSION"
   git -C "$LLAMA_DIR" checkout "$LLAMA_VERSION"
 elif [ -e "$LLAMA_DIR" ]; then
