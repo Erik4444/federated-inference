@@ -25,19 +25,30 @@ class RPCManager:
         cmd = [self._binary, "--host", host, "--port", str(port)]
         logger.info("Starting llama-rpc-server: %s", " ".join(cmd))
 
-        # DEVNULL prevents pipe-buffer blocking (llama-rpc-server writes a lot
-        # to stderr; if nobody reads it, the process stalls).
         self._process = subprocess.Popen(
             cmd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         self._port = port
 
         check_host = "127.0.0.1" if host == "0.0.0.0" else host
         if not self._wait_for_port(check_host, port, timeout=30):
+            # Capture output before killing so we can diagnose failures
+            stdout_tail = stderr_tail = ""
+            try:
+                out, err = self._process.communicate(timeout=2)
+                stdout_tail = out.decode(errors="replace").strip()[-500:]
+                stderr_tail = err.decode(errors="replace").strip()[-500:]
+            except Exception:
+                pass
             self.stop(force=True)
-            raise RuntimeError(f"llama-rpc-server did not start in time on port {port}")
+            msg = f"llama-rpc-server did not start in time on port {port}"
+            if stderr_tail:
+                msg += f"\nstderr: {stderr_tail}"
+            if stdout_tail:
+                msg += f"\nstdout: {stdout_tail}"
+            raise RuntimeError(msg)
 
         logger.info("llama-rpc-server listening on %s:%d", host, port)
         return f"{host}:{port}"
