@@ -1,8 +1,23 @@
 # Model configuration
 # Copy to model.yaml and adjust the model path.
+#
+# Where to get a GGUF model file:
+#   LM Studio  → download any model there, then find the file under:
+#                 ~/Library/Application Support/LM Studio/models/<author>/<repo>/*.gguf
+#               Copy or symlink it somewhere convenient, e.g. ~/models/
+#
+#   Good starting models (run well on CPU + a few workers):
+#     Llama-3.2-3B-Instruct  – Q4_K_M  (~2 GB)   ultra-fast on any hardware
+#     Llama-3.1-8B-Instruct  – Q4_K_M  (~5 GB)   good quality/speed trade-off
+#     Mistral-7B-Instruct    – Q4_K_M  (~4 GB)   solid general-purpose model
+#
+#   NOTE: LM Studio and Ollama do NOT support the --rpc flag that
+#   federated-inference needs.  You must use llama-server (built by
+#   scripts/install_llama_cpp.sh) as the coordinator backend — but you
+#   can freely reuse GGUF files that LM Studio already downloaded.
 
 model:
-  path: "/models/llama-3-70b-instruct.Q4_K_M.gguf"  # path on the coordinator
+  path: "~/models/llama-3.2-3b-instruct-q4_k_m.gguf"  # adjust to your GGUF path
   context_length: 4096
   n_gpu_layers: -1    # -1 = offload as many layers as possible to GPU/RPC workers
   batch_size: 512

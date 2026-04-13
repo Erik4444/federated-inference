@@ -23,27 +23,53 @@ if [ -n "${TERMUX_VERSION:-}" ] || [ -d "/data/data/com.termux" ]; then
   echo "==> Termux environment detected"
 fi
 
-# ── macOS ───────────────────────────────────────────────────────────────────
+# ── Install build deps ───────────────────────────────────────────────────────
 if [ "$OS" = "Darwin" ]; then
-  echo "==> Building for macOS (Metal acceleration)"
   if ! command -v cmake &>/dev/null; then
-    echo "  Installing cmake via Homebrew..."
+    echo "==> Installing cmake via Homebrew..."
     brew install cmake
   fi
-  git clone --depth 1 https://github.com/ggerganov/llama.cpp /tmp/llama.cpp 2>/dev/null || \
-    (cd /tmp/llama.cpp && git pull)
-  cmake -S /tmp/llama.cpp -B /tmp/llama.cpp/build \
+elif $IS_TERMUX; then
+  pkg install -y cmake clang git ninja 2>/dev/null || true
+elif command -v apt-get &>/dev/null; then
+  apt-get install -y --no-install-recommends cmake build-essential git ninja-build 2>/dev/null || true
+elif command -v dnf &>/dev/null; then
+  dnf install -y cmake gcc-c++ git ninja-build 2>/dev/null || true
+fi
+
+# ── Clone or update ──────────────────────────────────────────────────────────
+LLAMA_DIR="/tmp/llama.cpp"
+if [ -d "$LLAMA_DIR/.git" ]; then
+  echo "==> Updating existing llama.cpp clone in $LLAMA_DIR ..."
+  git -C "$LLAMA_DIR" pull --ff-only
+elif [ -e "$LLAMA_DIR" ]; then
+  echo "==> $LLAMA_DIR exists but is not a git repo — removing and re-cloning..."
+  rm -rf "$LLAMA_DIR"
+  git clone --depth 1 https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
+else
+  echo "==> Cloning llama.cpp..."
+  git clone --depth 1 https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
+fi
+
+# ── macOS ────────────────────────────────────────────────────────────────────
+if [ "$OS" = "Darwin" ]; then
+  echo "==> Building for macOS (Metal acceleration)"
+  cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" \
     -DGGML_METAL=ON \
     -DLLAMA_BUILD_SERVER=ON \
+    -DGGML_RPC=ON \
     -DCMAKE_BUILD_TYPE=Release
-  cmake --build /tmp/llama.cpp/build --config Release -j"$(sysctl -n hw.logicalcpu)"
-  install -m755 /tmp/llama.cpp/build/bin/llama-server "$PREFIX/bin/"
-  install -m755 /tmp/llama.cpp/build/bin/llama-rpc-server "$PREFIX/bin/"
+  cmake --build "$LLAMA_DIR/build" --config Release \
+    -j"$(sysctl -n hw.logicalcpu)" \
+    --target llama-server llama-rpc-server
+  mkdir -p "$PREFIX/bin"
+  install -m755 "$LLAMA_DIR/build/bin/llama-server" "$PREFIX/bin/"
+  install -m755 "$LLAMA_DIR/build/bin/llama-rpc-server" "$PREFIX/bin/"
   echo "==> Done (macOS Metal)"
   exit 0
 fi
 
-# ── Linux / Termux ──────────────────────────────────────────────────────────
+# ── Linux / Termux ───────────────────────────────────────────────────────────
 HAS_CUDA=false
 HAS_ROCM=false
 
@@ -55,25 +81,6 @@ elif command -v rocminfo &>/dev/null; then
   echo "==> AMD ROCm GPU detected"
 else
   echo "==> No GPU detected, building CPU-only"
-fi
-
-# Install build deps
-if $IS_TERMUX; then
-  pkg install -y cmake clang git ninja 2>/dev/null || true
-elif command -v apt-get &>/dev/null; then
-  apt-get install -y --no-install-recommends cmake build-essential git ninja-build 2>/dev/null || true
-elif command -v dnf &>/dev/null; then
-  dnf install -y cmake gcc-c++ git ninja-build 2>/dev/null || true
-fi
-
-# Clone or update
-LLAMA_DIR="/tmp/llama.cpp"
-if [ -d "$LLAMA_DIR/.git" ]; then
-  echo "==> Updating existing llama.cpp clone..."
-  git -C "$LLAMA_DIR" pull --ff-only
-else
-  echo "==> Cloning llama.cpp..."
-  git clone --depth 1 https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
 fi
 
 # Configure CMake flags

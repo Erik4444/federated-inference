@@ -1,0 +1,15 @@
+# Model configuration
+# Copy to model.yaml and adjust the model path.
+
+model:
+  path: "/models/llama-3-70b-instruct.Q4_K_M.gguf"  # path on the coordinator
+  context_length: 4096
+  n_gpu_layers: -1    # -1 = offload as many layers as possible to GPU/RPC workers
+  batch_size: 512
+  threads: 4          # CPU threads on the coordinator node
+
+# Extra flags passed verbatim to llama-server
+llama_server_extra_flags:
+  - "--flash-attn"
+  # - "--no-mmap"
+  # - "--mlock"
