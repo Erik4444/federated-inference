@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 from enum import Enum, auto
 
 from federated_inference.coordinator.config import CoordinatorSettings, ModelConfig
@@ -31,10 +32,12 @@ class LlamaManager:
         settings: CoordinatorSettings,
         model_config: ModelConfig,
         registry: WorkerRegistry,
+        notify_all: Callable[[str, str], Awaitable[None]] | None = None,
     ) -> None:
         self._settings = settings
         self._model = model_config
         self._registry = registry
+        self._notify_all = notify_all
         self._process: asyncio.subprocess.Process | None = None
         self.state = CoordinatorState.IDLE
         self._restart_event = asyncio.Event()
@@ -95,8 +98,23 @@ class LlamaManager:
                 self._settings.llama_server_host,
                 self._settings.llama_server_port,
             )
+            if self._notify_all:
+                await self._notify_all(
+                    "inference_ready",
+                    f"Coordinator is ready. llama-server listening on "
+                    f"{self._settings.llama_server_host}:{self._settings.llama_server_port}",
+                )
         else:
-            logger.error("llama-server failed to start")
+            stderr_output = ""
+            if self._process is not None:
+                try:
+                    _, stderr_bytes = await asyncio.wait_for(
+                        self._process.communicate(), timeout=5
+                    )
+                    stderr_output = stderr_bytes.decode(errors="replace").strip()
+                except asyncio.TimeoutError:
+                    pass
+            logger.error("llama-server failed to start. stderr:\n%s", stderr_output)
             await self._stop_server()
 
     async def _stop_server(self) -> None:

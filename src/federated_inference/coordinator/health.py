@@ -79,8 +79,12 @@ class HealthLoop:
             }
 
             if response.rpc_server_running and response.rpc_address:
-                entry.rpc_address = response.rpc_address
+                entry.rpc_address = f"{entry.node.host}:{entry.node.rpc_port}"
                 self._registry.transition(worker_id, WorkerState.ACTIVE)
+                await self.notify_worker(
+                    worker_id, "worker_connected",
+                    f"Worker {worker_id} is connected and RPC is active."
+                )
             else:
                 if entry.state == WorkerState.ACTIVE:
                     self._registry.transition(worker_id, WorkerState.HEALTHY)
@@ -131,8 +135,12 @@ class HealthLoop:
                 ),
             )
             if response.success:
-                entry.rpc_address = response.address
+                entry.rpc_address = f"{entry.node.host}:{entry.node.rpc_port}"
                 self._registry.transition(worker_id, WorkerState.ACTIVE)
+                await self.notify_worker(
+                    worker_id, "worker_connected",
+                    f"Worker {worker_id} is connected and RPC is active."
+                )
                 return True
             else:
                 logger.error("StartRPC failed for %s: %s", worker_id, response.error)
@@ -142,6 +150,29 @@ class HealthLoop:
             logger.error("StartRPC gRPC error for %s: %s", worker_id, e)
             self._registry.transition(worker_id, WorkerState.UNREACHABLE)
             return False
+
+    async def notify_worker(self, worker_id: str, event: str, message: str) -> None:
+        entry = self._registry.get(worker_id)
+        if entry is None:
+            return
+        address = f"{entry.node.host}:{entry.node.grpc_port}"
+        if address not in self._channels:
+            self._channels[address] = grpc.insecure_channel(address)
+        stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
+        try:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: stub.Notify(
+                    worker_pb2.NotifyRequest(event=event, message=message),
+                    timeout=5,
+                ),
+            )
+        except Exception as e:
+            logger.warning("Notify failed for %s: %s", worker_id, e)
+
+    async def notify_all_active(self, event: str, message: str) -> None:
+        for entry in self._registry.workers_in_state(WorkerState.ACTIVE):
+            await self.notify_worker(entry.id, event, message)
 
     async def stop_rpc_on_worker(self, worker_id: str) -> None:
         entry = self._registry.get(worker_id)
