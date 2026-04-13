@@ -88,14 +88,15 @@ class Worker:
         )
         if self._broadcaster:
             self._broadcaster.start()
-        # Run until server is stopped
-        self._server.wait_for_termination()
+        # Run until server is stopped — use executor to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, self._server.wait_for_termination)
 
     async def stop(self) -> None:
         """Gracefully stop the worker."""
         if self._broadcaster:
             await self._broadcaster.stop()
-        await self._rpc_manager.stop()
+        self._rpc_manager.stop()
         if self._server is not None:
             self._server.stop(grace=5)
             self._server = None

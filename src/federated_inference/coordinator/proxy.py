@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 
 import httpx
@@ -30,7 +31,6 @@ class LlamaProxy:
         # Detect if the client wants streaming (SSE)
         is_streaming = False
         if body:
-            import json
             try:
                 payload = json.loads(body)
                 is_streaming = payload.get("stream", False)

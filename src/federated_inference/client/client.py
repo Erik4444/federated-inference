@@ -28,8 +28,9 @@ class FederatedInferenceClient:
                 "Install it with: pip install 'federated-inference[client]'"
             ) from e
 
+        self._base_url = coordinator_url.rstrip("/")
         self._client = AsyncOpenAI(
-            base_url=coordinator_url.rstrip("/") + "/v1",
+            base_url=self._base_url + "/v1",
             api_key=api_key,
         )
 
@@ -52,7 +53,6 @@ class FederatedInferenceClient:
         except ImportError as e:
             raise ImportError("httpx is required for health checks") from e
 
-        base = str(self._client.base_url).rstrip("/v1").rstrip("/")
         async with httpx.AsyncClient() as http:
-            resp = await http.get(f"{base}/health", timeout=5)
+            resp = await http.get(f"{self._base_url}/health", timeout=5)
             return resp.json()

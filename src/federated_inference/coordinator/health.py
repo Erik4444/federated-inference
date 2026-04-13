@@ -57,7 +57,7 @@ class HealthLoop:
 
         stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
         try:
-            response = await asyncio.get_event_loop().run_in_executor(
+            response = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: stub.HealthCheck(
                     worker_pb2.HealthRequest(),
@@ -124,7 +124,7 @@ class HealthLoop:
             )
 
         try:
-            response = await asyncio.get_event_loop().run_in_executor(
+            response = await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: stub.StartRPC(
                     worker_pb2.StartRPCRequest(
@@ -160,7 +160,7 @@ class HealthLoop:
             self._channels[address] = grpc.insecure_channel(address)
         stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
         try:
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: stub.Notify(
                     worker_pb2.NotifyRequest(event=event, message=message),
@@ -183,7 +183,7 @@ class HealthLoop:
             return
         stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
         try:
-            await asyncio.get_event_loop().run_in_executor(
+            await asyncio.get_running_loop().run_in_executor(
                 None,
                 lambda: stub.StopRPC(worker_pb2.StopRPCRequest(force=False), timeout=15),
             )

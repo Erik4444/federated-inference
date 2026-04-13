@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import time
 
 import grpc
 
@@ -42,15 +41,10 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
         )
 
         running = self._rpc.is_running()
-        status = (
-            worker_pb2.HealthResponse.HEALTHY
-            if running or True  # worker itself is healthy independent of RPC server
-            else worker_pb2.HealthResponse.UNHEALTHY
-        )
 
         rpc_address = ""
-        if running and self._rpc._port is not None:
-            rpc_address = f"{self._config.grpc_host}:{self._rpc._port}"
+        if running and self._rpc.port is not None:
+            rpc_address = f"{self._config.rpc_host}:{self._rpc.port}"
 
         return worker_pb2.HealthResponse(
             status=worker_pb2.HealthResponse.HEALTHY,
@@ -92,7 +86,7 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
     # ── StreamMetrics ────────────────────────────────────────────────────────
 
     def StreamMetrics(self, request, context):
-        import time as time_mod
+        import time
 
         interval = max(1, request.interval_seconds)
         while context.is_active():
@@ -105,9 +99,9 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
                 cpu = 0.0
 
             yield worker_pb2.MetricsSnapshot(
-                timestamp_ms=int(time_mod.time() * 1000),
+                timestamp_ms=int(time.time() * 1000),
                 free_ram_bytes=free_ram,
                 free_vram_bytes=free_vram,
                 cpu_percent=cpu,
             )
-            time_mod.sleep(interval)
+            time.sleep(interval)
