@@ -84,8 +84,15 @@ class Worker:
         servicer = WorkerServicer(self._config, self._rpc_manager)
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
         worker_pb2_grpc.add_WorkerServiceServicer_to_server(servicer, self._server)
-        address = f"{self._config.grpc_host}:{self._config.grpc_port}"
-        bound = self._server.add_insecure_port(address)
+        host = self._config.grpc_host
+        # On Android/Termux gRPC tries IPv6 when binding 0.0.0.0 and fails.
+        # Forcing the ipv4: prefix restricts it to IPv4 only.
+        if host in ("0.0.0.0", ""):
+            grpc_address = f"ipv4:0.0.0.0:{self._config.grpc_port}"
+        else:
+            grpc_address = f"{host}:{self._config.grpc_port}"
+        address = f"{host}:{self._config.grpc_port}"
+        bound = self._server.add_insecure_port(grpc_address)
         if not bound:
             raise RuntimeError(
                 f"gRPC server could not bind to '{address}'. "
