@@ -116,13 +116,40 @@ detect_gpu
 
 # ── Build ───────────────────────────────────────────────────────────────────
 
-if [ "$OS" = "Darwin" ]; then
-  JOBS="${LLAMA_JOBS:-$(sysctl -n hw.logicalcpu)}"
+# Determine available RAM in MB, then cap jobs to ~1 per 1.5 GB so
+# the OOM-killer does not abort heavy C++ translation units (e.g. httplib).
+ram_cap_jobs() {
+  local ram_mb=0
+  if [ "$OS" = "Darwin" ]; then
+    ram_mb=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 ))
+  elif [ -r /proc/meminfo ]; then
+    ram_mb=$(awk '/^MemTotal:/ { print int($2/1024) }' /proc/meminfo)
+  fi
+  if [ "$ram_mb" -gt 0 ]; then
+    echo $(( ram_mb / 1536 < 1 ? 1 : ram_mb / 1536 ))
+  else
+    echo ""   # unknown — caller falls back to CPU count
+  fi
+}
+
+if [ -n "${LLAMA_JOBS:-}" ]; then
+  JOBS="$LLAMA_JOBS"
 else
-  JOBS="${LLAMA_JOBS:-$(nproc 2>/dev/null || echo 2)}"
+  if [ "$OS" = "Darwin" ]; then
+    CPU_JOBS=$(sysctl -n hw.logicalcpu)
+  else
+    CPU_JOBS=$(nproc 2>/dev/null || echo 2)
+  fi
+  RAM_JOBS=$(ram_cap_jobs)
+  if [ -n "$RAM_JOBS" ] && [ "$RAM_JOBS" -lt "$CPU_JOBS" ]; then
+    JOBS="$RAM_JOBS"
+    info "RAM-limited build: capping to $JOBS job(s) (set LLAMA_JOBS to override)"
+  else
+    JOBS="$CPU_JOBS"
+  fi
 fi
 
-info "Building with $JOBS jobs ..."
+info "Building with $JOBS job(s) ..."
 cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" "${CMAKE_FLAGS[@]}"
 cmake --build "$LLAMA_DIR/build" --config Release -j"$JOBS"
 
