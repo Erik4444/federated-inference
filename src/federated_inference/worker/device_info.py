@@ -53,12 +53,14 @@ def probe_vram() -> tuple[int, int]:
     try:
         import glob
         total_path = glob.glob("/sys/class/drm/card*/device/mem_info_vram_total")
-        free_path = glob.glob("/sys/class/drm/card*/device/mem_info_vram_used")
-        if total_path and free_path:
-            total = int(open(total_path[0]).read().strip())
-            used = int(open(free_path[0]).read().strip())
+        used_path = glob.glob("/sys/class/drm/card*/device/mem_info_vram_used")
+        if total_path and used_path:
+            with open(total_path[0]) as f:
+                total = int(f.read().strip())
+            with open(used_path[0]) as f:
+                used = int(f.read().strip())
             return total, max(0, total - used)
-    except Exception:
+    except (OSError, ValueError):
         pass
 
     return 0, 0

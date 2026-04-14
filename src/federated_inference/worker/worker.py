@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import shutil
 import socket
 from concurrent import futures
 
@@ -55,6 +56,11 @@ class Worker:
         if not self._config.worker_id:
             self._config.worker_id = socket.gethostname()
 
+        if not shutil.which(self._config.llama_rpc_binary):
+            raise FileNotFoundError(
+                f"RPC binary '{self._config.llama_rpc_binary}' not found in PATH. "
+                f"Run: bash scripts/install_llama_cpp.sh"
+            )
         self._rpc_manager = RPCManager(binary=self._config.llama_rpc_binary)
         self._server: grpc.Server | None = None
 

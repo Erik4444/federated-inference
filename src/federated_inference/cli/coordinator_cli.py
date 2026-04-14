@@ -49,10 +49,25 @@ def start(topology: str | None, model: str, discover: bool, discovery_port: int)
 
     model_config = ModelConfig.from_file(model)
     coordinator = Coordinator(topology=topo, model_config=model_config)
+
+    import signal
+
+    async def _run() -> None:
+        loop = asyncio.get_running_loop()
+        stop_event = asyncio.Event()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, stop_event.set)
+
+        start_task = asyncio.create_task(coordinator.start())
+        await stop_event.wait()
+        await coordinator.stop()
+        start_task.cancel()
+
     try:
-        asyncio.run(coordinator.start())
+        asyncio.run(_run())
     except KeyboardInterrupt:
-        click.echo("\nCoordinator stopped.")
+        pass
+    click.echo("\nCoordinator stopped.")
 
 
 @main.command()

@@ -58,6 +58,7 @@ class WorkerRegistry:
     def __init__(self) -> None:
         self._entries: dict[str, WorkerEntry] = {}
         self._state_change_callbacks: list[Callable[[WorkerEntry, WorkerState], None]] = []
+        self._lock = asyncio.Lock()
 
     def register_node(self, node: WorkerNode) -> None:
         self._entries[node.id] = WorkerEntry(node)
@@ -75,6 +76,12 @@ class WorkerRegistry:
         return [e.rpc_address for e in self.workers_in_state(WorkerState.ACTIVE) if e.rpc_address]
 
     def transition(self, worker_id: str, new_state: WorkerState) -> None:
+        """Transition a worker to a new state and fire callbacks.
+
+        Safe to call from both sync and async contexts.  When called from
+        within a running event loop the caller should use
+        ``async_transition`` instead to serialise concurrent transitions.
+        """
         entry = self._entries.get(worker_id)
         if entry is None:
             return
@@ -88,6 +95,11 @@ class WorkerRegistry:
                 cb(entry, new_state)
             except Exception as e:
                 logger.warning("State change callback error: %s", e)
+
+    async def async_transition(self, worker_id: str, new_state: WorkerState) -> None:
+        """Serialised state transition — prevents concurrent race conditions."""
+        async with self._lock:
+            self.transition(worker_id, new_state)
 
     def on_state_change(self, callback: Callable[[WorkerEntry, WorkerState], None]) -> None:
         self._state_change_callbacks.append(callback)

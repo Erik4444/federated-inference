@@ -68,7 +68,21 @@ def start(
             tags=tag_list,
         )
 
+    import signal
+
+    async def _run() -> None:
+        loop = asyncio.get_running_loop()
+        stop_event = asyncio.Event()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, stop_event.set)
+
+        start_task = asyncio.create_task(worker.start())
+        await stop_event.wait()
+        await worker.stop()
+        start_task.cancel()
+
     try:
-        asyncio.run(worker.start())
+        asyncio.run(_run())
     except KeyboardInterrupt:
-        click.echo("\nWorker stopped.")
+        pass
+    click.echo("\nWorker stopped.")

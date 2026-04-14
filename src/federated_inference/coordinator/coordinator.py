@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import signal
 
 import uvicorn
 
@@ -42,19 +41,23 @@ class Coordinator:
         for node in topology.enabled_workers:
             self.registry.register_node(node)
 
-        # Proxy to local llama-server
+        # LlamaManager (created first so proxy can reference its ready_event)
+        self.llama_manager = LlamaManager(
+            settings, model_config, self.registry,
+            notify_all=None,  # wired below after health_loop exists
+            restart_workers=self._restart_all_rpc_workers,
+        )
+
+        # Proxy to local llama-server — shares ready_event with LlamaManager
         llama_base = f"http://{settings.llama_server_host}:{settings.llama_server_port}"
-        self.proxy = LlamaProxy(llama_base)
+        self.proxy = LlamaProxy(llama_base, ready_event=self.llama_manager.ready_event)
+
+        # Wire drain_event so LlamaManager waits for in-flight requests
+        self.llama_manager._drain_event = self.proxy.drained
 
         # Health loop
         self._health_loop = HealthLoop(self.registry, settings)
-
-        # LlamaManager
-        self.llama_manager = LlamaManager(
-            settings, model_config, self.registry,
-            notify_all=self._health_loop.notify_all_active,
-            restart_workers=self._restart_all_rpc_workers,
-        )
+        self.llama_manager._notify_all = self._health_loop.notify_all_active
 
         # Optional UDP discovery
         self._discovery = None
@@ -81,7 +84,12 @@ class Coordinator:
             # Worker just came online (fresh start or recovery) — start its RPC server.
             # Using create_task because state-change callbacks are synchronous.
             asyncio.create_task(self._health_loop.start_rpc_on_worker(entry.id))
-        elif new_state in (WorkerState.ACTIVE, WorkerState.UNREACHABLE):
+        elif new_state == WorkerState.ACTIVE:
+            # New worker ready — debounced restart to include it.
+            self.llama_manager.request_restart()
+        elif new_state == WorkerState.UNREACHABLE:
+            # Worker lost — debounced restart to remove it.
+            # The debounce gives the worker a chance to recover before we restart.
             self.llama_manager.request_restart()
 
     async def _restart_all_rpc_workers(self) -> None:

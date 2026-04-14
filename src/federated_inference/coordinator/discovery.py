@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import socket
+import time
 
 from federated_inference.coordinator.config import WorkerNode
 from federated_inference.coordinator.registry import WorkerRegistry
@@ -11,6 +12,9 @@ from federated_inference.coordinator.registry import WorkerRegistry
 logger = logging.getLogger(__name__)
 
 DISCOVERY_PORT = 50052
+
+# Ignore duplicate announcements within this window (seconds).
+_DEBOUNCE_SECONDS = 15.0
 
 
 class WorkerDiscovery:
@@ -31,9 +35,9 @@ class WorkerDiscovery:
     ) -> None:
         self._registry = registry
         self._port = port
-        # Optional async callback(worker_id) fired when a new worker appears
         self._on_new_worker = on_new_worker
         self._task: asyncio.Task | None = None
+        self._last_seen: dict[str, float] = {}  # worker_id → monotonic timestamp
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._listen())
@@ -73,8 +77,18 @@ class WorkerDiscovery:
             grpc_port = int(payload.get("grpc_port", 50051))
             rpc_port = int(payload.get("rpc_port", 8765))
             tags = list(payload.get("tags", []))
-        except Exception:
+        except (ValueError, KeyError, UnicodeDecodeError):
             return
+
+        if not (1024 <= grpc_port <= 65535 and 1024 <= rpc_port <= 65535):
+            logger.debug("Discovery: ignoring packet with invalid ports from %s", source_ip)
+            return
+
+        # Debounce: skip if we heard from this worker very recently.
+        now = time.monotonic()
+        if now - self._last_seen.get(worker_id, 0) < _DEBOUNCE_SECONDS:
+            return
+        self._last_seen[worker_id] = now
 
         existing = self._registry.get(worker_id)
         if existing is None:

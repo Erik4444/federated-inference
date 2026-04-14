@@ -71,12 +71,15 @@ def build_app(coordinator: "Coordinator") -> FastAPI:
     async def _proxy_or_503(request: Request) -> Response:
         from federated_inference.coordinator.llama_manager import CoordinatorState
 
-        if coordinator.llama_manager.state != CoordinatorState.READY:
+        state = coordinator.llama_manager.state
+        # READY and RESTARTING are handled by the proxy (it queues during restart).
+        # Only reject requests when llama-server has never been started.
+        if state in (CoordinatorState.IDLE, CoordinatorState.STOPPING):
             raise HTTPException(
                 status_code=503,
                 detail={
                     "error": "service_unavailable",
-                    "message": f"Coordinator is not ready (state: {coordinator.llama_manager.state.name}). "
+                    "message": f"Coordinator is not ready (state: {state.name}). "
                                "Check /health for worker status.",
                 },
             )

@@ -44,6 +44,7 @@ class LlamaManager:
         registry: WorkerRegistry,
         notify_all: Callable[[str, str], Awaitable[None]] | None = None,
         restart_workers: Callable[[], Awaitable[None]] | None = None,
+        drain_event: asyncio.Event | None = None,
     ) -> None:
         self._settings = settings
         self._model = model_config
@@ -54,10 +55,50 @@ class LlamaManager:
         self.state = CoordinatorState.IDLE
         self._restart_event = asyncio.Event()
         self._task: asyncio.Task | None = None
+        self._backoff: float = 5.0  # initial retry delay (seconds)
+        self._max_backoff: float = 300.0  # cap at 5 minutes
+        # When set, all in-flight proxy requests have completed.
+        self._drain_event = drain_event
+        # Debounce: collect rapid topology changes before restarting.
+        self._debounce_seconds: float = 8.0
+        self._debounce_handle: asyncio.TimerHandle | None = None
+        # Tracks the --rpc addresses that the running llama-server was started with.
+        self._running_rpc_addresses: list[str] = []
+        # Signals that the proxy should queue new requests during restart.
+        self.ready_event = asyncio.Event()
 
     def request_restart(self) -> None:
-        """Signal that the worker set has changed and llama-server should restart."""
-        self._restart_event.set()
+        """Signal that the worker set has changed and llama-server should restart.
+
+        Multiple calls within ``_debounce_seconds`` are collapsed into a single
+        restart so that e.g. three workers coming online in quick succession
+        cause only one llama-server restart instead of three.
+        """
+        if self._debounce_handle is not None:
+            self._debounce_handle.cancel()
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # No event loop — fire immediately (e.g. during tests).
+            self._restart_event.set()
+            return
+
+        def _fire():
+            self._debounce_handle = None
+            self._restart_event.set()
+
+        self._debounce_handle = loop.call_later(self._debounce_seconds, _fire)
+        logger.info(
+            "Topology change detected — restart scheduled in %.0fs",
+            self._debounce_seconds,
+        )
+
+    def _should_restart(self) -> bool:
+        """Return True only if the active worker set actually changed."""
+        current = sorted(self._registry.active_rpc_addresses())
+        previous = sorted(self._running_rpc_addresses)
+        return current != previous
 
     async def run(self) -> None:
         """Main lifecycle loop – call this as a background task."""
@@ -67,6 +108,7 @@ class LlamaManager:
             if not active_addresses:
                 logger.info("No ACTIVE workers, waiting...")
                 self.state = CoordinatorState.IDLE
+                self.ready_event.clear()
                 await asyncio.sleep(5)
                 continue
 
@@ -76,12 +118,19 @@ class LlamaManager:
             # (their connection state may be broken) then back off and retry.
             if self.state != CoordinatorState.READY:
                 logger.info(
-                    "llama-server did not reach READY — recycling RPC workers and retrying in 10s..."
+                    "llama-server did not reach READY — recycling RPC workers and retrying in %.0fs...",
+                    self._backoff,
                 )
                 if self._restart_workers:
                     await self._restart_workers()
-                await asyncio.sleep(10)
+                await asyncio.sleep(self._backoff)
+                self._backoff = min(self._backoff * 2, self._max_backoff)
                 continue
+
+            # Reset backoff on success
+            self._backoff = 5.0
+            self._running_rpc_addresses = list(active_addresses)
+            self.ready_event.set()
 
             # Wait until a restart is requested:
             # - worker topology change (request_restart called externally)
@@ -89,8 +138,26 @@ class LlamaManager:
             self._restart_event.clear()
             await self._restart_event.wait()
 
-            logger.info("Worker topology changed or process died, restarting llama-server...")
+            # Check if the topology actually changed, or if the process just died.
+            process_died = (
+                self._process is not None
+                and self._process.returncode is not None
+            )
+
+            if not process_died and not self._should_restart():
+                logger.info("Topology change detected but active workers unchanged — skipping restart")
+                continue
+
+            reason = "process died" if process_died else "topology changed"
+            new_addresses = self._registry.active_rpc_addresses()
+            logger.info(
+                "Restarting llama-server (%s): %s → %s",
+                reason,
+                ",".join(self._running_rpc_addresses) or "(none)",
+                ",".join(new_addresses) or "(none)",
+            )
             self.state = CoordinatorState.RESTARTING
+            self.ready_event.clear()
             await self._stop_server()
 
     async def _drain_pipe(self, stream: asyncio.StreamReader) -> None:
@@ -178,6 +245,16 @@ class LlamaManager:
 
     async def _stop_server(self) -> None:
         self.state = CoordinatorState.STOPPING
+
+        # Drain: wait for in-flight proxy requests to complete (max 30s).
+        if self._drain_event and not self._drain_event.is_set():
+            logger.info("Waiting for %s in-flight requests to drain...", "remaining")
+            try:
+                await asyncio.wait_for(self._drain_event.wait(), timeout=30.0)
+                logger.info("All requests drained")
+            except asyncio.TimeoutError:
+                logger.warning("Drain timeout — stopping llama-server with in-flight requests")
+
         if self._process is not None and self._process.returncode is None:
             self._process.terminate()
             try:
@@ -185,6 +262,7 @@ class LlamaManager:
             except asyncio.TimeoutError:
                 self._process.kill()
         self._process = None
+        self._running_rpc_addresses = []
         self.state = CoordinatorState.IDLE
 
     async def _wait_ready(self, timeout: float = 300.0) -> bool:

@@ -12,6 +12,19 @@ from federated_inference.coordinator.registry import WorkerRegistry, WorkerState
 logger = logging.getLogger(__name__)
 
 
+# gRPC channel options tuned for unreliable WiFi networks.
+# Sends keepalive pings every 30s, times out after 10s with no response.
+_GRPC_CHANNEL_OPTIONS = [
+    ("grpc.keepalive_time_ms", 30_000),
+    ("grpc.keepalive_timeout_ms", 10_000),
+    ("grpc.keepalive_permit_without_calls", True),
+    ("grpc.http2.max_pings_without_data", 0),
+]
+
+# Number of consecutive failures before a gRPC channel is recycled.
+_CHANNEL_REFRESH_THRESHOLD = 3
+
+
 class HealthLoop:
     """Periodically health-checks all configured workers via gRPC."""
 
@@ -20,9 +33,24 @@ class HealthLoop:
         self._settings = settings
         self._task: asyncio.Task | None = None
         self._channels: dict[str, grpc.Channel] = {}
+        self._channel_failures: dict[str, int] = {}
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
+
+    def _get_channel(self, address: str) -> grpc.Channel:
+        """Return a cached gRPC channel, recycling stale ones after repeated failures."""
+        failures = self._channel_failures.get(address, 0)
+        if address in self._channels and failures >= _CHANNEL_REFRESH_THRESHOLD:
+            logger.info("Recycling stale gRPC channel for %s (%d failures)", address, failures)
+            self._channels[address].close()
+            del self._channels[address]
+            self._channel_failures[address] = 0
+
+        if address not in self._channels:
+            self._channels[address] = grpc.insecure_channel(address, options=_GRPC_CHANNEL_OPTIONS)
+
+        return self._channels[address]
 
     async def stop(self) -> None:
         if self._task:
@@ -33,6 +61,7 @@ class HealthLoop:
                 pass
         for ch in self._channels.values():
             ch.close()
+        self._channels.clear()
 
     async def _loop(self) -> None:
         # Initial connection attempt
@@ -52,10 +81,8 @@ class HealthLoop:
         node = entry.node
         address = f"{node.host}:{node.grpc_port}"
 
-        if address not in self._channels:
-            self._channels[address] = grpc.insecure_channel(address)
-
-        stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
+        channel = self._get_channel(address)
+        stub = worker_pb2_grpc.WorkerServiceStub(channel)
         try:
             response = await asyncio.get_running_loop().run_in_executor(
                 None,
@@ -65,6 +92,7 @@ class HealthLoop:
                 ),
             )
             entry.consecutive_failures = 0
+            self._channel_failures[address] = 0
 
             # Update device info
             di = response.device_info
@@ -81,18 +109,13 @@ class HealthLoop:
             if response.rpc_server_running and response.rpc_address:
                 entry.rpc_address = f"{entry.node.host}:{entry.node.rpc_port}"
                 self._registry.transition(worker_id, WorkerState.ACTIVE)
-                await self.notify_worker(
-                    worker_id, "worker_connected",
-                    f"Worker {worker_id} is connected and RPC is active."
-                )
             else:
-                if entry.state == WorkerState.ACTIVE:
-                    self._registry.transition(worker_id, WorkerState.HEALTHY)
-                elif entry.state in (WorkerState.CONNECTING, WorkerState.CONFIGURED):
+                if entry.state in (WorkerState.ACTIVE, WorkerState.CONNECTING, WorkerState.CONFIGURED):
                     self._registry.transition(worker_id, WorkerState.HEALTHY)
 
         except grpc.RpcError as e:
             entry.consecutive_failures += 1
+            self._channel_failures[address] = self._channel_failures.get(address, 0) + 1
             logger.warning("HealthCheck failed for %s: %s", worker_id, e.details() if hasattr(e, 'details') else e)
             self._registry.transition(worker_id, WorkerState.UNREACHABLE)
 
@@ -109,10 +132,8 @@ class HealthLoop:
         self._registry.transition(worker_id, WorkerState.RPC_STARTING)
         address = f"{entry.node.host}:{entry.node.grpc_port}"
 
-        if address not in self._channels:
-            self._channels[address] = grpc.insecure_channel(address)
-
-        stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
+        channel = self._get_channel(address)
+        stub = worker_pb2_grpc.WorkerServiceStub(channel)
         mem_limit_mb = entry.effective_mem_limit_mb()
         if mem_limit_mb > 0:
             logger.info(
@@ -156,9 +177,8 @@ class HealthLoop:
         if entry is None:
             return
         address = f"{entry.node.host}:{entry.node.grpc_port}"
-        if address not in self._channels:
-            self._channels[address] = grpc.insecure_channel(address)
-        stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
+        channel = self._get_channel(address)
+        stub = worker_pb2_grpc.WorkerServiceStub(channel)
         try:
             await asyncio.get_running_loop().run_in_executor(
                 None,
@@ -181,7 +201,7 @@ class HealthLoop:
         address = f"{entry.node.host}:{entry.node.grpc_port}"
         if address not in self._channels:
             return
-        stub = worker_pb2_grpc.WorkerServiceStub(self._channels[address])
+        stub = worker_pb2_grpc.WorkerServiceStub(self._get_channel(address))
         try:
             await asyncio.get_running_loop().run_in_executor(
                 None,

@@ -67,8 +67,8 @@ def test_models_endpoint(client):
     assert len(data["data"]) == 1
 
 
-def test_chat_completions_503_when_not_ready(coordinator_mock):
-    coordinator_mock.llama_manager.state = CoordinatorState.STARTING
+def test_chat_completions_503_when_idle(coordinator_mock):
+    coordinator_mock.llama_manager.state = CoordinatorState.IDLE
     from federated_inference.coordinator.api import build_app
     app = build_app(coordinator_mock)
     c = TestClient(app, raise_server_exceptions=False)
