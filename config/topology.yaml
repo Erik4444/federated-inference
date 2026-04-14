@@ -44,7 +44,15 @@ workers:
 
   - id: "android-phone-v3"
     host: "192.168.178.98"     # WLAN IP of the Android device (check with: ip addr show wlan0)
-    grpc_port: 50050
+    grpc_port: 50051
+    rpc_port: 8765
+    tags: ["arm64", "termux"]
+    enabled: true            # set to true once the device is set up
+    mem_limit_mb: 2048  
+
+  - id: "android-tab-e"
+    host: "192.168.178.64"     # WLAN IP of the Android device (check with: ip addr show wlan0)
+    grpc_port: 500501
     rpc_port: 8765
     tags: ["arm64", "termux"]
     enabled: true            # set to true once the device is set up

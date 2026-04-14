@@ -85,10 +85,11 @@ class Worker:
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
         worker_pb2_grpc.add_WorkerServiceServicer_to_server(servicer, self._server)
         host = self._config.grpc_host
-        # On Android/Termux gRPC tries IPv6 when binding 0.0.0.0 and fails.
-        # Forcing the ipv4: prefix restricts it to IPv4 only.
+        # On Android/Termux, binding 0.0.0.0 can fail when the kernel doesn't
+        # support dual-stack sockets. [::] (IPv6 any) with dual-stack is more
+        # reliable; it also accepts IPv4 connections on all Android versions.
         if host in ("0.0.0.0", ""):
-            grpc_address = f"ipv4:0.0.0.0:{self._config.grpc_port}"
+            grpc_address = f"[::]:{self._config.grpc_port}"
         else:
             grpc_address = f"{host}:{self._config.grpc_port}"
         address = f"{host}:{self._config.grpc_port}"
