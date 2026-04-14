@@ -38,6 +38,7 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
             free_vram_bytes=free_vram,
             os_info=di.get_os_info(),
             llama_cpp_version=di.probe_llama_version(self._config.llama_rpc_binary),
+            cpu_percent=di.probe_cpu(),
         )
 
         running = self._rpc.is_running()

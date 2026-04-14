@@ -46,6 +46,7 @@ def build_app(coordinator: "Coordinator") -> FastAPI:
                     "state": e.state.name,
                     "free_ram_bytes": e.device_info.get("free_ram_bytes", 0),
                     "free_vram_bytes": e.device_info.get("free_vram_bytes", 0),
+                    "cpu_percent": e.device_info.get("cpu_percent", 0.0),
                 }
                 for e in coordinator.registry.all()
             ]

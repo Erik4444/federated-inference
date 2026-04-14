@@ -242,6 +242,13 @@ federated-worker start
 See `scripts/install_llama_cpp_android.md` for detailed steps. Quick summary:
 
 ```bash
+# 1. Update package lists and upgrade installed packages
+pkg update && pkg upgrade
+
+# 2. Install Python and Git
+pkg install python git
+
+# 3. Install pre-built gRPC wheel and federated-inference
 pkg install python-grpcio     # pre-built wheel (avoids 1-hour compile)
 pip install federated-inference --no-deps
 pip install protobuf pyyaml click

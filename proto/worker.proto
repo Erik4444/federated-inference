@@ -60,6 +60,7 @@ message DeviceInfo {
   uint64 free_vram_bytes   = 5;
   string os_info           = 6; // e.g. "Linux 6.1 aarch64"
   string llama_cpp_version = 7; // output of llama-rpc-server --version
+  float  cpu_percent       = 8; // current CPU utilisation 0–100
 }
 
 message StartRPCRequest {

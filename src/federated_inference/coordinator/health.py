@@ -104,6 +104,7 @@ class HealthLoop:
                 "free_vram_bytes": di.free_vram_bytes,
                 "os_info": di.os_info,
                 "llama_cpp_version": di.llama_cpp_version,
+                "cpu_percent": di.cpu_percent,
             }
 
             if response.rpc_server_running and response.rpc_address:

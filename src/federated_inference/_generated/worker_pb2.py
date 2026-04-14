@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cworker.proto\x12\x13\x66\x65\x64\x65rated_inference\"J\n\x0fRegisterRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x11\n\tgrpc_host\x18\x02 \x01(\t\x12\x11\n\tgrpc_port\x18\x03 \x01(\x05\"5\n\x10RegisterResponse\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"\x0f\n\rHealthRequest\"\xf4\x01\n\x0eHealthResponse\x12:\n\x06status\x18\x01 \x01(\x0e\x32*.federated_inference.HealthResponse.Status\x12\x34\n\x0b\x64\x65vice_info\x18\x02 \x01(\x0b\x32\x1f.federated_inference.DeviceInfo\x12\x1a\n\x12rpc_server_running\x18\x03 \x01(\x08\x12\x13\n\x0brpc_address\x18\x04 \x01(\t\"?\n\x06Status\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0b\n\x07HEALTHY\x10\x01\x12\x0c\n\x08\x44\x45GRADED\x10\x02\x12\r\n\tUNHEALTHY\x10\x03\"\xaa\x01\n\nDeviceInfo\x12\x0c\n\x04\x61rch\x18\x01 \x01(\t\x12\x17\n\x0ftotal_ram_bytes\x18\x02 \x01(\x04\x12\x16\n\x0e\x66ree_ram_bytes\x18\x03 \x01(\x04\x12\x18\n\x10total_vram_bytes\x18\x04 \x01(\x04\x12\x17\n\x0f\x66ree_vram_bytes\x18\x05 \x01(\x04\x12\x0f\n\x07os_info\x18\x06 \x01(\t\x12\x19\n\x11llama_cpp_version\x18\x07 \x01(\t\"5\n\x0fStartRPCRequest\x12\x0c\n\x04port\x18\x01 \x01(\x05\x12\x14\n\x0cmem_limit_mb\x18\x02 \x01(\x04\"C\n\x10StartRPCResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"\x1f\n\x0eStopRPCRequest\x12\r\n\x05\x66orce\x18\x01 \x01(\x08\"1\n\x0fStopRPCResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\"/\n\rNotifyRequest\x12\r\n\x05\x65vent\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\"&\n\x0eNotifyResponse\x12\x14\n\x0c\x61\x63knowledged\x18\x01 \x01(\x08\"*\n\x0eMetricsRequest\x12\x18\n\x10interval_seconds\x18\x01 \x01(\x05\"m\n\x0fMetricsSnapshot\x12\x14\n\x0ctimestamp_ms\x18\x01 \x01(\x03\x12\x16\n\x0e\x66ree_ram_bytes\x18\x02 \x01(\x04\x12\x17\n\x0f\x66ree_vram_bytes\x18\x03 \x01(\x04\x12\x13\n\x0b\x63pu_percent\x18\x04 \x01(\x02\x32\xa0\x04\n\rWorkerService\x12W\n\x08Register\x12$.federated_inference.RegisterRequest\x1a%.federated_inference.RegisterResponse\x12V\n\x0bHealthCheck\x12\".federated_inference.HealthRequest\x1a#.federated_inference.HealthResponse\x12W\n\x08StartRPC\x12$.federated_inference.StartRPCRequest\x1a%.federated_inference.StartRPCResponse\x12T\n\x07StopRPC\x12#.federated_inference.StopRPCRequest\x1a$.federated_inference.StopRPCResponse\x12\\\n\rStreamMetrics\x12#.federated_inference.MetricsRequest\x1a$.federated_inference.MetricsSnapshot0\x01\x12Q\n\x06Notify\x12\".federated_inference.NotifyRequest\x1a#.federated_inference.NotifyResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0cworker.proto\x12\x13\x66\x65\x64\x65rated_inference\"J\n\x0fRegisterRequest\x12\x11\n\tworker_id\x18\x01 \x01(\t\x12\x11\n\tgrpc_host\x18\x02 \x01(\t\x12\x11\n\tgrpc_port\x18\x03 \x01(\x05\"5\n\x10RegisterResponse\x12\x10\n\x08\x61\x63\x63\x65pted\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t\"\x0f\n\rHealthRequest\"\xf4\x01\n\x0eHealthResponse\x12:\n\x06status\x18\x01 \x01(\x0e\x32*.federated_inference.HealthResponse.Status\x12\x34\n\x0b\x64\x65vice_info\x18\x02 \x01(\x0b\x32\x1f.federated_inference.DeviceInfo\x12\x1a\n\x12rpc_server_running\x18\x03 \x01(\x08\x12\x13\n\x0brpc_address\x18\x04 \x01(\t\"?\n\x06Status\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x0b\n\x07HEALTHY\x10\x01\x12\x0c\n\x08\x44\x45GRADED\x10\x02\x12\r\n\tUNHEALTHY\x10\x03\"\xbf\x01\n\nDeviceInfo\x12\x0c\n\x04\x61rch\x18\x01 \x01(\t\x12\x17\n\x0ftotal_ram_bytes\x18\x02 \x01(\x04\x12\x16\n\x0e\x66ree_ram_bytes\x18\x03 \x01(\x04\x12\x18\n\x10total_vram_bytes\x18\x04 \x01(\x04\x12\x17\n\x0f\x66ree_vram_bytes\x18\x05 \x01(\x04\x12\x0f\n\x07os_info\x18\x06 \x01(\t\x12\x19\n\x11llama_cpp_version\x18\x07 \x01(\t\x12\x13\n\x0b\x63pu_percent\x18\x08 \x01(\x02\"5\n\x0fStartRPCRequest\x12\x0c\n\x04port\x18\x01 \x01(\x05\x12\x14\n\x0cmem_limit_mb\x18\x02 \x01(\x04\"C\n\x10StartRPCResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07\x61\x64\x64ress\x18\x02 \x01(\t\x12\r\n\x05\x65rror\x18\x03 \x01(\t\"\x1f\n\x0eStopRPCRequest\x12\r\n\x05\x66orce\x18\x01 \x01(\x08\"1\n\x0fStopRPCResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\r\n\x05\x65rror\x18\x02 \x01(\t\"/\n\rNotifyRequest\x12\r\n\x05\x65vent\x18\x01 \x01(\t\x12\x0f\n\x07message\x18\x02 \x01(\t\"&\n\x0eNotifyResponse\x12\x14\n\x0c\x61\x63knowledged\x18\x01 \x01(\x08\"*\n\x0eMetricsRequest\x12\x18\n\x10interval_seconds\x18\x01 \x01(\x05\"m\n\x0fMetricsSnapshot\x12\x14\n\x0ctimestamp_ms\x18\x01 \x01(\x03\x12\x16\n\x0e\x66ree_ram_bytes\x18\x02 \x01(\x04\x12\x17\n\x0f\x66ree_vram_bytes\x18\x03 \x01(\x04\x12\x13\n\x0b\x63pu_percent\x18\x04 \x01(\x02\x32\xa0\x04\n\rWorkerService\x12W\n\x08Register\x12$.federated_inference.RegisterRequest\x1a%.federated_inference.RegisterResponse\x12V\n\x0bHealthCheck\x12\".federated_inference.HealthRequest\x1a#.federated_inference.HealthResponse\x12W\n\x08StartRPC\x12$.federated_inference.StartRPCRequest\x1a%.federated_inference.StartRPCResponse\x12T\n\x07StopRPC\x12#.federated_inference.StopRPCRequest\x1a$.federated_inference.StopRPCResponse\x12\\\n\rStreamMetrics\x12#.federated_inference.MetricsRequest\x1a$.federated_inference.MetricsSnapshot0\x01\x12Q\n\x06Notify\x12\".federated_inference.NotifyRequest\x1a#.federated_inference.NotifyResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -42,23 +42,23 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_HEALTHRESPONSE_STATUS']._serialized_start=367
   _globals['_HEALTHRESPONSE_STATUS']._serialized_end=430
   _globals['_DEVICEINFO']._serialized_start=433
-  _globals['_DEVICEINFO']._serialized_end=603
-  _globals['_STARTRPCREQUEST']._serialized_start=605
-  _globals['_STARTRPCREQUEST']._serialized_end=658
-  _globals['_STARTRPCRESPONSE']._serialized_start=660
-  _globals['_STARTRPCRESPONSE']._serialized_end=727
-  _globals['_STOPRPCREQUEST']._serialized_start=729
-  _globals['_STOPRPCREQUEST']._serialized_end=760
-  _globals['_STOPRPCRESPONSE']._serialized_start=762
-  _globals['_STOPRPCRESPONSE']._serialized_end=811
-  _globals['_NOTIFYREQUEST']._serialized_start=813
-  _globals['_NOTIFYREQUEST']._serialized_end=860
-  _globals['_NOTIFYRESPONSE']._serialized_start=862
-  _globals['_NOTIFYRESPONSE']._serialized_end=900
-  _globals['_METRICSREQUEST']._serialized_start=902
-  _globals['_METRICSREQUEST']._serialized_end=944
-  _globals['_METRICSSNAPSHOT']._serialized_start=946
-  _globals['_METRICSSNAPSHOT']._serialized_end=1055
-  _globals['_WORKERSERVICE']._serialized_start=1058
-  _globals['_WORKERSERVICE']._serialized_end=1602
+  _globals['_DEVICEINFO']._serialized_end=624
+  _globals['_STARTRPCREQUEST']._serialized_start=626
+  _globals['_STARTRPCREQUEST']._serialized_end=679
+  _globals['_STARTRPCRESPONSE']._serialized_start=681
+  _globals['_STARTRPCRESPONSE']._serialized_end=748
+  _globals['_STOPRPCREQUEST']._serialized_start=750
+  _globals['_STOPRPCREQUEST']._serialized_end=781
+  _globals['_STOPRPCRESPONSE']._serialized_start=783
+  _globals['_STOPRPCRESPONSE']._serialized_end=832
+  _globals['_NOTIFYREQUEST']._serialized_start=834
+  _globals['_NOTIFYREQUEST']._serialized_end=881
+  _globals['_NOTIFYRESPONSE']._serialized_start=883
+  _globals['_NOTIFYRESPONSE']._serialized_end=921
+  _globals['_METRICSREQUEST']._serialized_start=923
+  _globals['_METRICSREQUEST']._serialized_end=965
+  _globals['_METRICSSNAPSHOT']._serialized_start=967
+  _globals['_METRICSSNAPSHOT']._serialized_end=1076
+  _globals['_WORKERSERVICE']._serialized_start=1079
+  _globals['_WORKERSERVICE']._serialized_end=1623
 # @@protoc_insertion_point(module_scope)

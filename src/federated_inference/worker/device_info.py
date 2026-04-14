@@ -74,6 +74,30 @@ def get_arch() -> str:
     return platform.machine()
 
 
+def probe_cpu() -> float:
+    """Return current CPU utilisation as a percentage (0–100). Best-effort."""
+    try:
+        import psutil
+        # interval=None returns the value since the last call (non-blocking).
+        # First call always returns 0.0, so fall back to a short measurement.
+        val = psutil.cpu_percent(interval=None)
+        if val == 0.0:
+            val = psutil.cpu_percent(interval=0.1)
+        return round(val, 1)
+    except Exception:
+        pass
+    # Fallback: read /proc/stat on Linux/Android
+    try:
+        with open("/proc/stat") as f:
+            parts = f.readline().split()
+        user, nice, system, idle = int(parts[1]), int(parts[2]), int(parts[3]), int(parts[4])
+        total = user + nice + system + idle
+        busy = total - idle
+        return round(busy / total * 100, 1) if total > 0 else 0.0
+    except Exception:
+        return 0.0
+
+
 def probe_llama_version(binary: str) -> str:
     try:
         out = subprocess.check_output(
