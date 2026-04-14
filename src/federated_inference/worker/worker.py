@@ -82,25 +82,36 @@ class Worker:
     async def start(self) -> None:
         """Start the gRPC server and block until stopped."""
         servicer = WorkerServicer(self._config, self._rpc_manager)
-        self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
+        self._server = grpc.server(
+            futures.ThreadPoolExecutor(max_workers=4),
+            options=[("grpc.so_reuseport", 0)],
+        )
         worker_pb2_grpc.add_WorkerServiceServicer_to_server(servicer, self._server)
         host = self._config.grpc_host
-        # On Android/Termux, binding 0.0.0.0 can fail when the kernel doesn't
-        # support dual-stack sockets. [::] (IPv6 any) with dual-stack is more
-        # reliable; it also accepts IPv4 connections on all Android versions.
+        port = self._config.grpc_port
+        # Older Android kernels (3.x) may only accept one address family.
+        # Try 0.0.0.0 (IPv4) and [::] (IPv6 dual-stack) in sequence so the
+        # worker starts on both old and new devices without manual tuning.
         if host in ("0.0.0.0", ""):
-            grpc_address = f"[::]:{self._config.grpc_port}"
+            candidates = [f"0.0.0.0:{port}", f"[::]:{port}"]
         else:
-            grpc_address = f"{host}:{self._config.grpc_port}"
-        address = f"{host}:{self._config.grpc_port}"
-        bound = self._server.add_insecure_port(grpc_address)
+            candidates = [f"{host}:{port}"]
+        address = candidates[0]
+        bound = 0
+        for addr in candidates:
+            bound = self._server.add_insecure_port(addr)
+            if bound:
+                address = addr
+                logger.debug("gRPC bound to %s", addr)
+                break
+            logger.debug("gRPC could not bind to %s, trying next", addr)
         if not bound:
             raise RuntimeError(
-                f"gRPC server could not bind to '{address}'. "
+                f"gRPC server could not bind to port {port}. "
+                f"Tried: {', '.join(candidates)}\n"
                 "Possible causes:\n"
                 "  1. Port is already in use (kill any existing worker process)\n"
-                "  2. The host address does not exist on this device "
-                "(use '0.0.0.0' to bind all interfaces)"
+                "  2. Missing network permissions on this device"
             )
         self._server.start()
         logger.info(
