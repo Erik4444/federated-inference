@@ -97,14 +97,43 @@ CMAKE_FLAGS=(
   -DCMAKE_BUILD_TYPE=Release
 )
 
-# On Termux (low-RAM Android devices) reduce compilation memory usage:
-#   - GGML_NATIVE=OFF   skips native CPU-feature detection → fewer heavy variants
-#   - O1 instead of O3  cuts per-TU RAM by ~40–60 % (ggml-cpu is the worst offender)
-if $IS_TERMUX; then
+# Detect available RAM in MB (best-effort, returns 0 if unknown).
+available_ram_mb() {
+  if [ "$OS" = "Darwin" ]; then
+    echo $(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 ))
+  elif [ -r /proc/meminfo ]; then
+    awk '/^MemTotal:/ { print int($2/1024) }' /proc/meminfo
+  else
+    echo 0
+  fi
+}
+
+RAM_MB=$(available_ram_mb)
+
+# Low-RAM builds: ggml-cpu.cpp is the worst offender — even a single compiler
+# process can consume >1.5 GB at -O2/-O3 due to the llamafile SIMD dispatch
+# variants and CPU-all-variants codegen.
+#
+# Thresholds (total device RAM):
+#   < 2 GB  → ultra-low: -O0, disable ALL optional codegen (Galaxy Tab E/A etc.)
+#   < 4 GB  → low:       -O1, disable CPU-all-variants and llamafile dispatch
+if [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 2048 ]; then
+  info "Ultra-low-RAM device detected (${RAM_MB} MB) — disabling heavy codegen"
   CMAKE_FLAGS+=(
     -DGGML_NATIVE=OFF
-    -DCMAKE_CXX_FLAGS_RELEASE="-O1"
-    -DCMAKE_C_FLAGS_RELEASE="-O1"
+    -DGGML_CPU_ALL_VARIANTS=OFF
+    -DGGML_LLAMAFILE=OFF
+    "-DCMAKE_C_FLAGS=-O0 -g0 -fno-lto"
+    "-DCMAKE_CXX_FLAGS=-O0 -g0 -fno-lto"
+  )
+elif $IS_TERMUX || { [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 4096 ]; }; then
+  info "Low-RAM device detected (${RAM_MB} MB) — reducing compile-time memory usage"
+  CMAKE_FLAGS+=(
+    -DGGML_NATIVE=OFF
+    -DGGML_CPU_ALL_VARIANTS=OFF
+    -DGGML_LLAMAFILE=OFF
+    "-DCMAKE_C_FLAGS=-O1 -g0 -fno-lto"
+    "-DCMAKE_CXX_FLAGS=-O1 -g0 -fno-lto"
   )
 fi
 
@@ -127,39 +156,23 @@ detect_gpu
 
 # ── Build ───────────────────────────────────────────────────────────────────
 
-# Determine available RAM in MB, then cap jobs to ~1 per 1.5 GB so
-# the OOM-killer does not abort heavy C++ translation units (e.g. httplib).
-ram_cap_jobs() {
-  local ram_mb=0
-  if [ "$OS" = "Darwin" ]; then
-    ram_mb=$(( $(sysctl -n hw.memsize 2>/dev/null || echo 0) / 1048576 ))
-  elif [ -r /proc/meminfo ]; then
-    ram_mb=$(awk '/^MemTotal:/ { print int($2/1024) }' /proc/meminfo)
-  fi
-  if [ "$ram_mb" -gt 0 ]; then
-    echo $(( ram_mb / 1536 < 1 ? 1 : ram_mb / 1536 ))
-  else
-    echo ""   # unknown — caller falls back to CPU count
-  fi
-}
-
 if [ -n "${LLAMA_JOBS:-}" ]; then
   JOBS="$LLAMA_JOBS"
-elif $IS_TERMUX; then
-  # Always single-threaded on Termux: ggml-cpu TUs can consume >1.5 GB each,
-  # so parallel jobs reliably trigger the Android OOM-killer.
+elif $IS_TERMUX || { [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 4096 ]; }; then
+  # Always single-threaded on low-RAM / Termux: even one ggml-cpu TU can consume
+  # >1 GB, so parallel jobs reliably trigger the Android OOM-killer.
   JOBS=1
-  info "Termux build: forcing -j1 to avoid OOM on ggml-cpu (set LLAMA_JOBS to override)"
+  info "Low-RAM build: forcing -j1 (${RAM_MB} MB RAM, set LLAMA_JOBS to override)"
 else
   if [ "$OS" = "Darwin" ]; then
     CPU_JOBS=$(sysctl -n hw.logicalcpu)
   else
     CPU_JOBS=$(nproc 2>/dev/null || echo 2)
   fi
-  RAM_JOBS=$(ram_cap_jobs)
-  if [ -n "$RAM_JOBS" ] && [ "$RAM_JOBS" -lt "$CPU_JOBS" ]; then
-    JOBS="$RAM_JOBS"
-    info "RAM-limited build: capping to $JOBS job(s) (set LLAMA_JOBS to override)"
+  # Cap to 1 job per 1.5 GB for the remaining cases.
+  if [ "$RAM_MB" -gt 0 ]; then
+    RAM_JOBS=$(( RAM_MB / 1536 < 1 ? 1 : RAM_MB / 1536 ))
+    JOBS=$(( RAM_JOBS < CPU_JOBS ? RAM_JOBS : CPU_JOBS ))
   else
     JOBS="$CPU_JOBS"
   fi
