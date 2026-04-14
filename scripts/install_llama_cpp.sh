@@ -97,6 +97,17 @@ CMAKE_FLAGS=(
   -DCMAKE_BUILD_TYPE=Release
 )
 
+# On Termux (low-RAM Android devices) reduce compilation memory usage:
+#   - GGML_NATIVE=OFF   skips native CPU-feature detection → fewer heavy variants
+#   - O1 instead of O3  cuts per-TU RAM by ~40–60 % (ggml-cpu is the worst offender)
+if $IS_TERMUX; then
+  CMAKE_FLAGS+=(
+    -DGGML_NATIVE=OFF
+    -DCMAKE_CXX_FLAGS_RELEASE="-O1"
+    -DCMAKE_C_FLAGS_RELEASE="-O1"
+  )
+fi
+
 detect_gpu() {
   if [ "$OS" = "Darwin" ]; then
     CMAKE_FLAGS+=(-DGGML_METAL=ON)
@@ -134,6 +145,11 @@ ram_cap_jobs() {
 
 if [ -n "${LLAMA_JOBS:-}" ]; then
   JOBS="$LLAMA_JOBS"
+elif $IS_TERMUX; then
+  # Always single-threaded on Termux: ggml-cpu TUs can consume >1.5 GB each,
+  # so parallel jobs reliably trigger the Android OOM-killer.
+  JOBS=1
+  info "Termux build: forcing -j1 to avoid OOM on ggml-cpu (set LLAMA_JOBS to override)"
 else
   if [ "$OS" = "Darwin" ]; then
     CPU_JOBS=$(sysctl -n hw.logicalcpu)
