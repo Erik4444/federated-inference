@@ -106,12 +106,21 @@ class Worker:
                 break
             logger.debug("gRPC could not bind to %s, trying next", addr)
         if not bound:
+            # Check whether the port is bindable at all with a plain socket.
+            # If yes, the problem is specific to grpcio (broken build for this
+            # architecture) and not a system permission or port-in-use issue.
+            plain_ok = _can_bind_port(port)
+            if plain_ok:
+                hint = (
+                    "Plain socket binding succeeded, so grpcio itself is the issue.\n"
+                    "Try reinstalling it from source:\n"
+                    "  pip install --no-binary :all: grpcio"
+                )
+            else:
+                hint = "Port is in use or network permissions are missing."
             raise RuntimeError(
                 f"gRPC server could not bind to port {port}. "
-                f"Tried: {', '.join(candidates)}\n"
-                "Possible causes:\n"
-                "  1. Port is already in use (kill any existing worker process)\n"
-                "  2. Missing network permissions on this device"
+                f"Tried: {', '.join(candidates)}\n{hint}"
             )
         self._server.start()
         logger.info(
@@ -133,3 +142,17 @@ class Worker:
         if self._server is not None:
             self._server.stop(grace=5)
             self._server = None
+
+
+def _can_bind_port(port: int) -> bool:
+    """Return True if a plain TCP socket can bind to *port* on this machine."""
+    for family in (socket.AF_INET, socket.AF_INET6):
+        try:
+            with socket.socket(family, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                host = "0.0.0.0" if family == socket.AF_INET else "::"
+                s.bind((host, port))
+                return True
+        except OSError:
+            continue
+    return False
