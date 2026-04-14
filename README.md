@@ -71,6 +71,13 @@ pip install --break-system-packages federated-inference[coordinator]
 pip install federated-inference  # minimal install, no uvicorn/FastAPI
 ```
 
+**On Android/Termux workers**, use the Termux gRPC package instead of pip:
+```bash
+pkg install python-grpcio
+pip install federated-inference --no-deps
+pip install protobuf pyyaml click
+```
+
 ### Step 2: Build llama.cpp (Required on EVERY device)
 
 ```bash
@@ -295,6 +302,17 @@ workers:
 **Fix**:
 ```bash
 pip install federated-inference  # ← without [coordinator]
+```
+
+### `grpcio failed to build installable wheels` on Android / Termux
+
+**Cause**: `pip` is trying to build `grpcio` from source because no usable wheel is available for that Android/Termux environment.
+
+**Fix**:
+```bash
+pkg install python-grpcio
+pip install federated-inference --no-deps
+pip install protobuf pyyaml click
 ```
 
 ### `fatal: could not create work tree dir '/tmp/llama.cpp'`

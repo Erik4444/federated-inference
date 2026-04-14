@@ -9,13 +9,16 @@
 
 ```bash
 pkg update && pkg upgrade -y
-pkg install -y python clang cmake git ninja binutils
+pkg install -y python python-grpcio clang cmake git ninja binutils
 ```
 
 ## Step 2: Install the federated-inference Python package
 
 ```bash
-pip install federated-inference
+# Use Termux's prebuilt grpcio package. Building grpcio from pip usually fails
+# on Android with "failed to build installable wheels".
+pip install federated-inference --no-deps
+pip install protobuf pyyaml click
 ```
 
 ## Step 3: Build and install llama.cpp
@@ -72,6 +75,7 @@ chmod +x ~/.termux/boot/start-worker.sh
 
 ## Notes
 
+- **gRPC on Termux**: Install `python-grpcio` via `pkg`, not via `pip`. The pip build commonly fails on Android because no compatible wheel is available and compiling grpcio from source is fragile there.
 - **Performance**: Android devices use CPU inference (no CUDA). Expect ~2-8 tok/s depending on the device and model size.
 - **RAM**: A typical Android phone has 8-12 GB RAM. With Q4_K_M quantization, a 7B model fits in ~4 GB.
 - **Battery**: The device will consume significant battery while running inference. Consider keeping it plugged in.
