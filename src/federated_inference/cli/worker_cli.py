@@ -8,15 +8,8 @@ import click
 
 
 @click.group()
-@click.option("--log-level", default="INFO", show_default=True,
-              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
-def main(log_level: str) -> None:
+def main() -> None:
     """federated-worker – Edge device worker for federated LLM inference."""
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()),
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        stream=sys.stdout,
-    )
 
 
 @main.command()
@@ -36,6 +29,8 @@ def main(log_level: str) -> None:
 @click.option("--rpc-port", default=8765, show_default=True,
               help="Port for llama-rpc-server (included in discovery payload)")
 @click.option("--tags", default="", help="Comma-separated tags, e.g. arm64,termux")
+@click.option("--log-level", default="INFO", show_default=True,
+              type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
 def start(
     grpc_port: int,
     grpc_host: str,
@@ -47,8 +42,15 @@ def start(
     discovery_port: int,
     rpc_port: int,
     tags: str,
+    log_level: str,
 ) -> None:
     """Start the worker gRPC server."""
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        stream=sys.stdout,
+    )
+
     from federated_inference.worker.worker import Worker
 
     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
