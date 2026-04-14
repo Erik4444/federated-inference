@@ -8,6 +8,7 @@
 # Environment:
 #   LLAMA_VERSION  — git tag to build (default: latest release)
 #   LLAMA_JOBS     — parallel build jobs (default: auto-detect)
+#   LLAMA_FORCE    — set to 1 to rebuild even if version is already installed
 
 set -euo pipefail
 
@@ -56,28 +57,63 @@ if [ "$LLAMA_VERSION" = "latest" ]; then
   info "Latest release: $LLAMA_VERSION"
 fi
 
+# ── Skip if already installed at requested version ──────────────────────────
+
+VERSION_FILE="$BINDIR/.llama_cpp_version"
+INSTALLED_VERSION=""
+[ -f "$VERSION_FILE" ] && INSTALLED_VERSION=$(cat "$VERSION_FILE")
+
+if [ "${LLAMA_FORCE:-0}" != "1" ] && \
+   [ "$INSTALLED_VERSION" = "$LLAMA_VERSION" ] && \
+   [ -f "$BINDIR/llama-server" ] && \
+   [ -f "$BINDIR/rpc-server" ]; then
+  info "llama.cpp $LLAMA_VERSION already installed — skipping build."
+  info "Set LLAMA_FORCE=1 to force a rebuild."
+  exit 0
+fi
+
 # ── Build dependencies ──────────────────────────────────────────────────────
 
 install_deps() {
   if [ "$OS" = "Darwin" ]; then
     command -v cmake &>/dev/null || { info "Installing cmake via Homebrew..."; brew install cmake; }
+    # ccache speeds up repeated builds significantly
+    command -v ccache &>/dev/null || { brew install ccache 2>/dev/null || true; }
   elif $IS_TERMUX; then
-    pkg install -y cmake clang git ninja 2>/dev/null || true
+    pkg install -y cmake clang git ninja ccache 2>/dev/null || true
   elif command -v apt-get &>/dev/null; then
-    apt-get install -y --no-install-recommends cmake build-essential git ninja-build 2>/dev/null || true
+    apt-get install -y --no-install-recommends cmake build-essential git ninja-build ccache 2>/dev/null || true
   elif command -v dnf &>/dev/null; then
-    dnf install -y cmake gcc-c++ git ninja-build 2>/dev/null || true
+    dnf install -y cmake gcc-c++ git ninja-build ccache 2>/dev/null || true
   fi
 }
 
 install_deps
 
+# ── ccache setup ────────────────────────────────────────────────────────────
+
+CCACHE_CMAKE_FLAGS=()
+if command -v ccache &>/dev/null; then
+  ok "ccache found — repeated builds will be significantly faster"
+  CCACHE_CMAKE_FLAGS=(
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+  )
+fi
+
 # ── Clone / update source ──────────────────────────────────────────────────
 
 if [ -d "$LLAMA_DIR/.git" ]; then
-  info "Updating existing clone to $LLAMA_VERSION ..."
-  git -C "$LLAMA_DIR" fetch --depth 1 origin tag "$LLAMA_VERSION"
-  git -C "$LLAMA_DIR" checkout "$LLAMA_VERSION"
+  CURRENT_TAG=$(git -C "$LLAMA_DIR" describe --tags --exact-match 2>/dev/null || echo "")
+  if [ "$CURRENT_TAG" = "$LLAMA_VERSION" ]; then
+    info "Source already at $LLAMA_VERSION — reusing existing clone"
+  else
+    info "Updating existing clone to $LLAMA_VERSION ..."
+    git -C "$LLAMA_DIR" fetch --depth 1 origin tag "$LLAMA_VERSION"
+    git -C "$LLAMA_DIR" checkout "$LLAMA_VERSION"
+    # Source changed: wipe build dir so cmake reconfigures cleanly
+    rm -rf "$LLAMA_DIR/build"
+  fi
 elif [ -e "$LLAMA_DIR" ]; then
   info "$LLAMA_DIR exists but is not a git repo — re-cloning..."
   rm -rf "$LLAMA_DIR"
@@ -87,14 +123,13 @@ else
   git clone --depth 1 --branch "$LLAMA_VERSION" https://github.com/ggerganov/llama.cpp "$LLAMA_DIR"
 fi
 
-rm -rf "$LLAMA_DIR/build"
-
 # ── CMake configuration ────────────────────────────────────────────────────
 
 CMAKE_FLAGS=(
   -DLLAMA_BUILD_SERVER=ON
   -DGGML_RPC=ON
   -DCMAKE_BUILD_TYPE=Release
+  "${CCACHE_CMAKE_FLAGS[@]}"
 )
 
 # Detect available RAM in MB (best-effort, returns 0 if unknown).
@@ -126,7 +161,7 @@ if [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 2048 ]; then
     "-DCMAKE_C_FLAGS=-O0 -g0 -fno-lto"
     "-DCMAKE_CXX_FLAGS=-O0 -g0 -fno-lto"
   )
-elif $IS_TERMUX || { [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 4096 ]; }; then
+elif [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 4096 ]; then
   info "Low-RAM device detected (${RAM_MB} MB) — reducing compile-time memory usage"
   CMAKE_FLAGS+=(
     -DGGML_NATIVE=OFF
@@ -158,9 +193,9 @@ detect_gpu
 
 if [ -n "${LLAMA_JOBS:-}" ]; then
   JOBS="$LLAMA_JOBS"
-elif $IS_TERMUX || { [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 4096 ]; }; then
-  # Always single-threaded on low-RAM / Termux: even one ggml-cpu TU can consume
-  # >1 GB, so parallel jobs reliably trigger the Android OOM-killer.
+elif [ "$RAM_MB" -gt 0 ] && [ "$RAM_MB" -lt 4096 ]; then
+  # Low-RAM devices (< 4 GB): single-threaded to avoid OOM-killer.
+  # Note: Termux with >= 4 GB RAM uses the standard parallel detection below.
   JOBS=1
   info "Low-RAM build: forcing -j1 (${RAM_MB} MB RAM, set LLAMA_JOBS to override)"
 else
@@ -169,7 +204,7 @@ else
   else
     CPU_JOBS=$(nproc 2>/dev/null || echo 2)
   fi
-  # Cap to 1 job per 1.5 GB for the remaining cases.
+  # Cap to 1 job per 1.5 GB to avoid OOM.
   if [ "$RAM_MB" -gt 0 ]; then
     RAM_JOBS=$(( RAM_MB / 1536 < 1 ? 1 : RAM_MB / 1536 ))
     JOBS=$(( RAM_JOBS < CPU_JOBS ? RAM_JOBS : CPU_JOBS ))
@@ -180,7 +215,8 @@ fi
 
 info "Building with $JOBS job(s) ..."
 cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" "${CMAKE_FLAGS[@]}"
-cmake --build "$LLAMA_DIR/build" --config Release -j"$JOBS"
+cmake --build "$LLAMA_DIR/build" --config Release -j"$JOBS" \
+  --target llama-server rpc-server
 
 # ── Install binaries ───────────────────────────────────────────────────────
 
@@ -209,6 +245,10 @@ install_bin llama-server
 install_bin rpc-server
 
 [ ${#INSTALLED[@]} -gt 0 ] || die "No binaries installed. Build may have failed."
+
+# ── Stamp installed version ──────────────────────────────────────────────────
+
+echo "$LLAMA_VERSION" > "$VERSION_FILE"
 
 # ── Summary ─────────────────────────────────────────────────────────────────
 
