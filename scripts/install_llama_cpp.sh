@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install_llama_cpp.sh — Build and install llama-server + rpc-server from source.
+# install_llama_cpp.sh — Build and install llama.cpp server binaries from source.
 # Supports: macOS (Metal), Linux x86_64/aarch64 (CUDA, ROCm, CPU), Android (Termux).
 #
 # Usage:
@@ -63,10 +63,26 @@ VERSION_FILE="$BINDIR/.llama_cpp_version"
 INSTALLED_VERSION=""
 [ -f "$VERSION_FILE" ] && INSTALLED_VERSION=$(cat "$VERSION_FILE")
 
+BUILD_TARGETS=(llama-server rpc-server)
+INSTALL_BINS=(llama-server rpc-server)
+if $IS_TERMUX; then
+  # Android workers only need rpc-server. Building llama-server on Bionic can
+  # fail to link due to missing posix_spawn_file_actions_* symbols.
+  BUILD_TARGETS=(rpc-server)
+  INSTALL_BINS=(rpc-server)
+fi
+
+have_all_install_bins=true
+for bin in "${INSTALL_BINS[@]}"; do
+  if [ ! -f "$BINDIR/$bin" ]; then
+    have_all_install_bins=false
+    break
+  fi
+done
+
 if [ "${LLAMA_FORCE:-0}" != "1" ] && \
    [ "$INSTALLED_VERSION" = "$LLAMA_VERSION" ] && \
-   [ -f "$BINDIR/llama-server" ] && \
-   [ -f "$BINDIR/rpc-server" ]; then
+   $have_all_install_bins; then
   info "llama.cpp $LLAMA_VERSION already installed — skipping build."
   info "Set LLAMA_FORCE=1 to force a rebuild."
   exit 0
@@ -128,6 +144,9 @@ fi
 CMAKE_FLAGS=(
   -DLLAMA_BUILD_SERVER=ON
   -DGGML_RPC=ON
+  -DBUILD_TESTING=OFF
+  -DLLAMA_BUILD_TESTS=OFF
+  -DGGML_BUILD_TESTS=OFF
   -DCMAKE_BUILD_TYPE=Release
   "${CCACHE_CMAKE_FLAGS[@]}"
 )
@@ -216,7 +235,7 @@ fi
 info "Building with $JOBS job(s) ..."
 cmake -S "$LLAMA_DIR" -B "$LLAMA_DIR/build" "${CMAKE_FLAGS[@]}"
 cmake --build "$LLAMA_DIR/build" --config Release -j"$JOBS" \
-  --target llama-server rpc-server
+  --target "${BUILD_TARGETS[@]}"
 
 # ── Install binaries ───────────────────────────────────────────────────────
 
@@ -241,8 +260,9 @@ install_bin() {
   fi
 }
 
-install_bin llama-server
-install_bin rpc-server
+for bin in "${INSTALL_BINS[@]}"; do
+  install_bin "$bin"
+done
 
 [ ${#INSTALLED[@]} -gt 0 ] || die "No binaries installed. Build may have failed."
 

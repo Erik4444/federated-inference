@@ -77,7 +77,11 @@ pip install federated-inference  # minimal install, no uvicorn/FastAPI
 bash scripts/install_llama_cpp.sh
 ```
 
-This builds `llama-server` and `llama-rpc-server` from llama.cpp source, with optimizations:
+This builds the llama.cpp binaries needed on the current machine:
+- macOS/Linux coordinator: `llama-server` and `rpc-server`
+- Android/Termux worker: `rpc-server` only
+
+with optimizations:
 - **macOS**: Metal GPU acceleration (M1/M2/M3/M4)
 - **Linux + NVIDIA**: CUDA GPU support
 - **Linux + AMD**: ROCm GPU support
@@ -257,6 +261,8 @@ bash scripts/install_llama_cpp.sh  # builds llama.cpp (~20 min)
 federated-worker start
 ```
 
+On Android/Termux the installer intentionally skips `llama-server` and only builds `rpc-server`, because the coordinator role is not supported there and recent llama.cpp releases can fail to link `llama-server` against Bionic.
+
 ---
 
 ## Load Balancing & Capacity Management
@@ -299,6 +305,25 @@ pip install federated-inference  # ← without [coordinator]
 ```bash
 rm -rf /tmp/llama.cpp
 bash scripts/install_llama_cpp.sh
+```
+
+### Android / Termux build fails with `undefined symbol posix_spawn_file_actions_init`
+
+**Cause**: llama.cpp test executables such as `test-jinja` are being linked on an Android/Bionic build where that symbol is unavailable.
+
+**Fix**:
+```bash
+# use the shared installer, which now disables upstream test targets
+bash scripts/install_llama_cpp.sh
+
+# for manual CMake builds, disable tests explicitly
+cmake -S ~/llama.cpp -B ~/llama.cpp/build \
+  -DLLAMA_BUILD_SERVER=ON \
+  -DGGML_RPC=ON \
+  -DBUILD_TESTING=OFF \
+  -DLLAMA_BUILD_TESTS=OFF \
+  -DGGML_BUILD_TESTS=OFF \
+  -DCMAKE_BUILD_TYPE=Release
 ```
 
 ### Worker never goes `HEALTHY`
@@ -358,7 +383,7 @@ A: No hard limit. Performance degrades gracefully with network latency. 10–20 
 A: Yes. Just configure `topology.yaml` with `host: "127.0.0.1"` for a local worker.
 
 **Q: How do I monitor performance?**
-A: Check coordinator logs for health updates. curl the `/health` endpoint.
+A: Run `federated-coordinator dashboard --topology config/topology.yaml` for a live worker table, or query `/health` directly if you only need the raw JSON status.
 
 ---
 

@@ -7,6 +7,28 @@ import sys
 import click
 
 
+def _coordinator_health_url(
+    topology: str | None,
+    host: str | None = None,
+    port: int | None = None,
+) -> str:
+    coord_host = host
+    coord_port = port
+
+    if topology:
+        from federated_inference.coordinator.config import TopologyConfig
+
+        cfg = TopologyConfig.from_file(topology)
+        coord_host = coord_host or cfg.coordinator.host
+        coord_port = coord_port or cfg.coordinator.port
+
+    coord_host = coord_host or "127.0.0.1"
+    coord_port = coord_port or 8080
+    if coord_host == "0.0.0.0":
+        coord_host = "127.0.0.1"
+    return f"http://{coord_host}:{coord_port}/health"
+
+
 @click.group()
 @click.option("--log-level", default="INFO", show_default=True,
               type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"], case_sensitive=False))
@@ -15,7 +37,7 @@ def main(log_level: str) -> None:
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        stream=sys.stdout,
+        stream=sys.stderr,
     )
 
 
@@ -71,19 +93,25 @@ def start(topology: str | None, model: str, discover: bool, discovery_port: int)
 
 
 @main.command()
-@click.option("--topology", required=True, type=click.Path(exists=True))
-def status(topology: str) -> None:
-    """Print the status of all configured workers."""
+@click.option("--topology", default=None, type=click.Path(exists=True),
+              help="Path to topology.yaml (optional when --host/--port are used)")
+@click.option("--host", default=None,
+              help="Coordinator host (defaults to topology.yaml or 127.0.0.1)")
+@click.option("--port", default=None, type=int,
+              help="Coordinator port (defaults to topology.yaml or 8080)")
+def status(topology: str | None, host: str | None, port: int | None) -> None:
+    """Print the current status of all workers known to the coordinator."""
     import httpx
-    from federated_inference.coordinator.config import TopologyConfig
 
-    cfg = TopologyConfig.from_file(topology)
-    url = f"http://{cfg.coordinator.host if cfg.coordinator.host != '0.0.0.0' else '127.0.0.1'}:{cfg.coordinator.port}/health"
+    url = _coordinator_health_url(topology, host, port)
     try:
         resp = httpx.get(url, timeout=5)
         data = resp.json()
         click.echo(f"Coordinator state: {data['coordinator_state']}")
-        for w in data.get("workers", []):
+        workers = data.get("workers", [])
+        if not workers:
+            click.echo("  No workers registered yet.")
+        for w in workers:
             click.echo(f"  [{w['state']:12}] {w['id']}  rpc={w['rpc_address'] or '-'}")
     except Exception as e:
         click.echo(f"Could not reach coordinator at {url}: {e}", err=True)
@@ -91,16 +119,19 @@ def status(topology: str) -> None:
 
 
 @main.command()
-@click.option("--topology", required=True, type=click.Path(exists=True),
-              help="Path to topology.yaml (to find the coordinator address)")
+@click.option("--topology", default=None, type=click.Path(exists=True),
+              help="Path to topology.yaml (optional when --host/--port are used)")
 @click.option("--interval", default=5, show_default=True,
               help="Refresh interval in seconds")
 @click.option("--host", default=None,
-              help="Override coordinator host (default: read from topology.yaml)")
+              help="Override coordinator host (default: read from topology.yaml or 127.0.0.1)")
 @click.option("--port", default=None, type=int,
-              help="Override coordinator port (default: read from topology.yaml)")
-def dashboard(topology: str, interval: int, host: str | None, port: int | None) -> None:
+              help="Override coordinator port (default: read from topology.yaml or 8080)")
+def dashboard(topology: str | None, interval: int, host: str | None, port: int | None) -> None:
     """Live terminal dashboard — shows RAM, CPU, and state of all workers."""
+    # Silence all loggers so they don't break the rich Live display.
+    logging.disable(logging.CRITICAL)
+
     try:
         from rich.console import Console
         from rich.live import Live
@@ -113,12 +144,8 @@ def dashboard(topology: str, interval: int, host: str | None, port: int | None) 
 
     import httpx
     import time
-    from federated_inference.coordinator.config import TopologyConfig
 
-    cfg = TopologyConfig.from_file(topology)
-    coord_host = host or (cfg.coordinator.host if cfg.coordinator.host != "0.0.0.0" else "127.0.0.1")
-    coord_port = port or cfg.coordinator.port
-    url = f"http://{coord_host}:{coord_port}/health"
+    url = _coordinator_health_url(topology, host, port)
 
     console = Console()
 
@@ -217,6 +244,16 @@ def dashboard(topology: str, interval: int, host: str | None, port: int | None) 
 
         total_cap_gb = 0.0
         active_count = 0
+
+        if not workers:
+            table.add_row(
+                Text("—", style="dim"),
+                Text("No workers registered yet", style="yellow"),
+                Text("Waiting for health checks or discovery", style="dim"),
+                Text("—", style="dim"),
+                Text("—", style="dim"),
+                Text("—", style="dim"),
+            )
 
         for w in workers:
             wid    = w["id"]

@@ -47,3 +47,11 @@ def test_worker_config_defaults():
     cfg = WorkerConfig()
     assert cfg.grpc_port == 50051
     assert cfg.rpc_host == "0.0.0.0"
+    assert cfg.llama_rpc_binary == "rpc-server"
+
+
+def test_worker_config_from_file_defaults_to_installed_binary(tmp_path):
+    p = tmp_path / "worker.yaml"
+    p.write_text("{}")
+    cfg = WorkerConfig.from_file(p)
+    assert cfg.llama_rpc_binary == "rpc-server"

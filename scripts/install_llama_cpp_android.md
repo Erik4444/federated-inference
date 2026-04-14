@@ -33,9 +33,12 @@ git clone --depth 1 https://github.com/ggerganov/llama.cpp ~/llama.cpp
 cmake -S ~/llama.cpp -B ~/llama.cpp/build \
   -DLLAMA_BUILD_SERVER=ON \
   -DGGML_RPC=ON \
+  -DBUILD_TESTING=OFF \
+  -DLLAMA_BUILD_TESTS=OFF \
+  -DGGML_BUILD_TESTS=OFF \
   -DCMAKE_BUILD_TYPE=Release
-cmake --build ~/llama.cpp/build --target llama-server llama-rpc-server -j$(nproc)
-cp ~/llama.cpp/build/bin/llama-rpc-server $PREFIX/bin/
+cmake --build ~/llama.cpp/build --target rpc-server -j$(nproc)
+cp ~/llama.cpp/build/bin/rpc-server $PREFIX/bin/
 ```
 
 ## Step 4: Start the worker

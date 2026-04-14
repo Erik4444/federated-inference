@@ -23,5 +23,5 @@ class WorkerConfig:
             grpc_host=str(data.get("grpc_host", "0.0.0.0")),
             grpc_port=int(data.get("grpc_port", 50051)),
             rpc_host=str(data.get("rpc_host", "0.0.0.0")),
-            llama_rpc_binary=str(data.get("llama_rpc_binary", "llama-rpc-server")),
+            llama_rpc_binary=str(data.get("llama_rpc_binary", "rpc-server")),
         )

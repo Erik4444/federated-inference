@@ -111,7 +111,15 @@ class HealthLoop:
                 entry.rpc_address = f"{entry.node.host}:{entry.node.rpc_port}"
                 self._registry.transition(worker_id, WorkerState.ACTIVE)
             else:
-                if entry.state in (WorkerState.ACTIVE, WorkerState.CONNECTING, WorkerState.CONFIGURED):
+                # Include UNREACHABLE and DEGRADED so a recovered worker
+                # triggers HEALTHY → start_rpc_on_worker again.
+                if entry.state in (
+                    WorkerState.ACTIVE,
+                    WorkerState.CONNECTING,
+                    WorkerState.CONFIGURED,
+                    WorkerState.UNREACHABLE,
+                    WorkerState.DEGRADED,
+                ):
                     self._registry.transition(worker_id, WorkerState.HEALTHY)
 
         except grpc.RpcError as e:
