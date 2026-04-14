@@ -41,6 +41,7 @@ def coordinator_mock():
     coord.llama_manager = llama_mgr
     coord.proxy = proxy
     coord.model_config = model_cfg
+    coord.topology = topology
     return coord
 
 
@@ -55,8 +56,17 @@ def test_health_endpoint(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["coordinator_state"] == "READY"
+    assert data["coordinator"]["id"] == "orchestrator"
     assert len(data["workers"]) == 1
     assert data["workers"][0]["id"] == "w1"
+
+
+def test_metrics_endpoint_includes_coordinator(client):
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["coordinator"]["id"] == "orchestrator"
+    assert len(data["workers"]) == 1
 
 
 def test_models_endpoint(client):

@@ -85,7 +85,15 @@ class Worker:
         self._server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))
         worker_pb2_grpc.add_WorkerServiceServicer_to_server(servicer, self._server)
         address = f"{self._config.grpc_host}:{self._config.grpc_port}"
-        self._server.add_insecure_port(address)
+        bound = self._server.add_insecure_port(address)
+        if not bound:
+            raise RuntimeError(
+                f"gRPC server could not bind to '{address}'. "
+                "Possible causes:\n"
+                "  1. Port is already in use (kill any existing worker process)\n"
+                "  2. The host address does not exist on this device "
+                "(use '0.0.0.0' to bind all interfaces)"
+            )
         self._server.start()
         logger.info(
             "Worker '%s' gRPC server listening on %s",

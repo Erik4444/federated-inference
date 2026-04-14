@@ -5,6 +5,7 @@ import time
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from federated_inference.coordinator.status import build_health_snapshot, build_metrics_snapshot
 
 if TYPE_CHECKING:
     from federated_inference.coordinator.coordinator import Coordinator
@@ -23,34 +24,11 @@ def build_app(coordinator: "Coordinator") -> FastAPI:
 
     @app.get("/health")
     async def health():
-        workers = [
-            {
-                "id": e.id,
-                "state": e.state.name,
-                "rpc_address": e.rpc_address,
-                "device_info": e.device_info,
-            }
-            for e in coordinator.registry.all()
-        ]
-        return {
-            "coordinator_state": coordinator.llama_manager.state.name,
-            "workers": workers,
-        }
+        return build_health_snapshot(coordinator)
 
     @app.get("/metrics")
     async def metrics():
-        return {
-            "workers": [
-                {
-                    "id": e.id,
-                    "state": e.state.name,
-                    "free_ram_bytes": e.device_info.get("free_ram_bytes", 0),
-                    "free_vram_bytes": e.device_info.get("free_vram_bytes", 0),
-                    "cpu_percent": e.device_info.get("cpu_percent", 0.0),
-                }
-                for e in coordinator.registry.all()
-            ]
-        }
+        return build_metrics_snapshot(coordinator)
 
     # ── OpenAI-compatible endpoints ──────────────────────────────────────────
 

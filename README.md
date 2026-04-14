@@ -180,10 +180,12 @@ federated-worker start --grpc-port 50051 --grpc-host 0.0.0.0
 
 ```bash
 source ~/.venvs/federated/bin/activate
-federated-coordinator start --topology config/topology.yaml --model config/model.yaml
+federated-coordinator start --topology config/topology.yaml --model config/model.yaml --dashboard
 ```
 
-Watch the logs:
+The same terminal can now render a live table with the orchestrator plus all workers. If you prefer plain logs, omit `--dashboard`.
+
+Watch the logs without the dashboard:
 ```
 [INFO] Worker 'raspberry-pi': CONFIGURED → CONNECTING → HEALTHY → ACTIVE
 [INFO] Worker 'x86-workstation': CONFIGURED → CONNECTING → HEALTHY → ACTIVE
