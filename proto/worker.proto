@@ -53,14 +53,16 @@ message HealthResponse {
 }
 
 message DeviceInfo {
-  string arch              = 1; // e.g. "aarch64", "x86_64"
-  uint64 total_ram_bytes   = 2;
-  uint64 free_ram_bytes    = 3;
-  uint64 total_vram_bytes  = 4; // 0 if no GPU
-  uint64 free_vram_bytes   = 5;
-  string os_info           = 6; // e.g. "Linux 6.1 aarch64"
-  string llama_cpp_version = 7; // output of llama-rpc-server --version
-  float  cpu_percent       = 8; // current CPU utilisation 0–100
+  string arch                  = 1; // e.g. "aarch64", "x86_64"
+  uint64 total_ram_bytes       = 2;
+  uint64 free_ram_bytes        = 3;
+  uint64 total_vram_bytes      = 4; // 0 if no GPU
+  uint64 free_vram_bytes       = 5;
+  string os_info               = 6; // e.g. "Linux 6.1 aarch64"
+  string llama_cpp_version     = 7; // output of llama-rpc-server --version
+  float  cpu_percent           = 8; // current CPU utilisation 0–100
+  float  net_tx_bytes_per_sec  = 9; // outbound bytes/s (rolling average)
+  float  net_rx_bytes_per_sec  = 10; // inbound bytes/s (rolling average)
 }
 
 message StartRPCRequest {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import platform
 import shutil
 import subprocess
+import time
 
 
 def _probe_ram_procfs() -> tuple[int, int]:
@@ -96,6 +97,33 @@ def probe_cpu() -> float:
         return round(busy / total * 100, 1) if total > 0 else 0.0
     except Exception:
         return 0.0
+
+
+_net_prev: dict = {}
+
+
+def probe_net() -> tuple[float, float]:
+    """Return (tx_bytes_per_sec, rx_bytes_per_sec) since the last call. Best-effort."""
+    try:
+        import psutil
+        now = time.monotonic()
+        counters = psutil.net_io_counters()
+        if counters is None:
+            return 0.0, 0.0
+        prev_counters = _net_prev.get("counters")
+        prev_time = _net_prev.get("time", now)
+        _net_prev["counters"] = counters
+        _net_prev["time"] = now
+        if prev_counters is None:
+            return 0.0, 0.0
+        dt = now - prev_time
+        if dt <= 0:
+            return 0.0, 0.0
+        tx = (counters.bytes_sent - prev_counters.bytes_sent) / dt
+        rx = (counters.bytes_recv - prev_counters.bytes_recv) / dt
+        return max(0.0, tx), max(0.0, rx)
+    except Exception:
+        return 0.0, 0.0
 
 
 def probe_llama_version(binary: str) -> str:

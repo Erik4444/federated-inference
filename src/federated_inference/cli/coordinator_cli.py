@@ -98,6 +98,27 @@ def _state_text(Text, state: str):
     return Text(label, style=style)
 
 
+def _net_text(Text, tx: float, rx: float):
+    def _fmt(b: float) -> str:
+        if b >= 1024 ** 2:
+            return f"{b / 1024 ** 2:5.1f} MB/s"
+        if b >= 1024:
+            return f"{b / 1024:5.1f} KB/s"
+        return f"{b:5.0f}  B/s"
+
+    if tx <= 0 and rx <= 0:
+        return Text("—", style="dim")
+    label = f"↑ {_fmt(tx)}  ↓ {_fmt(rx)}"
+    peak = max(tx, rx)
+    if peak >= 50 * 1024 ** 2:
+        style = "bold cyan"
+    elif peak >= 5 * 1024 ** 2:
+        style = "cyan"
+    else:
+        style = "dim cyan"
+    return Text(label, style=style)
+
+
 def _device_text(Text, arch: str, total_ram: int, state: str):
     if total_ram == 0:
         return Text(arch, style="dim" if state in ("UNREACHABLE", "CONFIGURED", "IDLE") else "")
@@ -122,6 +143,7 @@ def _build_dashboard_table(Table, Text, box, data: dict | None, error: str | Non
     table.add_column("State", min_width=16)
     table.add_column("RAM (used/total)", min_width=26)
     table.add_column("CPU", min_width=8, justify="right")
+    table.add_column("Network", min_width=28)
     table.add_column("Device", min_width=12)
     table.add_column("Endpoint", min_width=18)
 
@@ -129,6 +151,7 @@ def _build_dashboard_table(Table, Text, box, data: dict | None, error: str | Non
         table.add_row(
             Text("—", style="dim"),
             Text(f"Cannot reach coordinator: {error}", style="bold red"),
+            Text("—", style="dim"),
             Text("—", style="dim"),
             Text("—", style="dim"),
             Text("—", style="dim"),
@@ -151,6 +174,8 @@ def _build_dashboard_table(Table, Text, box, data: dict | None, error: str | Non
         total_ram = di.get("total_ram_bytes", 0)
         free_ram = di.get("free_ram_bytes", 0)
         cpu_pct = di.get("cpu_percent", 0.0)
+        net_tx = di.get("net_tx_bytes_per_sec", 0.0)
+        net_rx = di.get("net_rx_bytes_per_sec", 0.0)
         arch = di.get("arch", "")
         endpoint = coordinator.get("llama_address") or coordinator.get("api_address") or "—"
         table.add_row(
@@ -158,6 +183,7 @@ def _build_dashboard_table(Table, Text, box, data: dict | None, error: str | Non
             _state_text(Text, coordinator.get("state", coordinator_state)),
             _ram_bar(Text, free_ram, total_ram),
             _cpu_text(Text, cpu_pct),
+            _net_text(Text, net_tx, net_rx),
             _device_text(Text, arch, total_ram, coordinator.get("state", coordinator_state)),
             Text(endpoint, style="dim"),
         )
@@ -168,6 +194,7 @@ def _build_dashboard_table(Table, Text, box, data: dict | None, error: str | Non
             Text("—", style="dim"),
             Text("No workers registered yet", style="yellow"),
             Text("Waiting for health checks or discovery", style="dim"),
+            Text("—", style="dim"),
             Text("—", style="dim"),
             Text("—", style="dim"),
             Text("—", style="dim"),
@@ -182,17 +209,21 @@ def _build_dashboard_table(Table, Text, box, data: dict | None, error: str | Non
         total_ram = di.get("total_ram_bytes", 0)
         free_ram = di.get("free_ram_bytes", 0)
         cpu_pct = di.get("cpu_percent", 0.0)
+        net_tx = di.get("net_tx_bytes_per_sec", 0.0)
+        net_rx = di.get("net_rx_bytes_per_sec", 0.0)
         arch = di.get("arch", "")
 
         if state == "ACTIVE":
             active_count += 1
             total_cap_gb += total_ram / 1024 ** 3
 
+        inactive = state in ("UNREACHABLE", "CONFIGURED")
         table.add_row(
             wid,
             _state_text(Text, state),
-            _ram_bar(Text, free_ram, total_ram) if state not in ("UNREACHABLE", "CONFIGURED") else Text("—", style="dim"),
-            _cpu_text(Text, cpu_pct) if state not in ("UNREACHABLE", "CONFIGURED") else Text("—", style="dim"),
+            _ram_bar(Text, free_ram, total_ram) if not inactive else Text("—", style="dim"),
+            _cpu_text(Text, cpu_pct) if not inactive else Text("—", style="dim"),
+            _net_text(Text, net_tx, net_rx) if not inactive else Text("—", style="dim"),
             _device_text(Text, arch, total_ram, state),
             Text(rpc, style="dim"),
         )
@@ -202,6 +233,7 @@ def _build_dashboard_table(Table, Text, box, data: dict | None, error: str | Non
         Text("TOTAL", style="bold"),
         Text(f"llama: {coordinator_state}", style="bold cyan"),
         Text(f"{total_cap_gb:.1f} GB active capacity", style="bold"),
+        Text(""),
         Text(""),
         Text(f"{active_count}/{len(workers)} active", style="bold"),
         Text(""),

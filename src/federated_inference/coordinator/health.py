@@ -12,13 +12,21 @@ from federated_inference.coordinator.registry import WorkerRegistry, WorkerState
 logger = logging.getLogger(__name__)
 
 
-# gRPC channel options tuned for unreliable WiFi networks.
-# Sends keepalive pings every 30s, times out after 10s with no response.
+# gRPC channel options tuned for Android devices on WiFi.
+#
+# Android's power manager aggressively kills idle TCP connections and can
+# put the WiFi chip into power-saving mode after several minutes of
+# sustained load. We work around this by:
+#   - pinging every 10s (well below Android's ~30s idle kill threshold)
+#   - allowing pings without active calls (keepalive_permit_without_calls)
+#   - retrying up to 5 times before giving up on a failed connection
 _GRPC_CHANNEL_OPTIONS = [
-    ("grpc.keepalive_time_ms", 30_000),
-    ("grpc.keepalive_timeout_ms", 10_000),
+    ("grpc.keepalive_time_ms", 10_000),
+    ("grpc.keepalive_timeout_ms", 5_000),
     ("grpc.keepalive_permit_without_calls", True),
     ("grpc.http2.max_pings_without_data", 0),
+    ("grpc.max_reconnect_backoff_ms", 10_000),
+    ("grpc.initial_reconnect_backoff_ms", 1_000),
 ]
 
 # Number of consecutive failures before a gRPC channel is recycled.
@@ -105,6 +113,8 @@ class HealthLoop:
                 "os_info": di.os_info,
                 "llama_cpp_version": di.llama_cpp_version,
                 "cpu_percent": di.cpu_percent,
+                "net_tx_bytes_per_sec": di.net_tx_bytes_per_sec,
+                "net_rx_bytes_per_sec": di.net_rx_bytes_per_sec,
             }
 
             if response.rpc_server_running and response.rpc_address:

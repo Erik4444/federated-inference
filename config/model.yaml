@@ -2,15 +2,33 @@
 # Copy to model.yaml and adjust the model path.
 
 model:
-  path: "/Users/erik/Desktop/Projekte/federated-inference/models/LFM2.5-1.2B-Instruct-Q4_K_M.gguf"
+  path: "/Users/erik/Desktop/Projekte/federated-inference/models/gemma-3-12b-it-Q4_K_M.gguf"
   context_length: 4096
   n_gpu_layers: -1    # -1 = offload as many layers as possible to GPU/RPC workers
   batch_size: 512
-  threads: 4          # CPU threads on the coordinator node
+  ubatch_size: 256    # physical batch for RPC transfers; 128–256 is faster than 512 over WiFi
+  threads: 8          # CPU threads on the coordinator node — increase if you have more cores
 
 # Extra flags passed verbatim to llama-server
 llama_server_extra_flags:
   - "--flash-attn"
   - "on"
+  # Performance note for Android RPC workers:
+  #
+  # Pipeline parallelism (llama.cpp --rpc) is sequential per token — every
+  # forward pass must traverse all devices in order.  With Android phones
+  # over WiFi this means: WiFi latency + CPU compute on each phone per layer.
+  # Result: roughly 10–100× slower than running the model locally.
+  #
+  # Android phones help only when the model does NOT fit in the coordinator's
+  # RAM/VRAM at all.  If it fits locally, remove the phones from topology.yaml
+  # (set enabled: false) and run with just the laptop for 10 t/s.
+  #
+  # If you want to keep the phones for capacity:
+  #   - Make sure llama-rpc-server on Android uses Vulkan (GPU):
+  #       ./llama-rpc-server --host 0.0.0.0 --port 8765 --n-gpu-layers 999
+  #   - Disable WiFi power saving on each Android device:
+  #       Settings → WiFi → Advanced → Keep WiFi on during sleep: Always
+  #   - Increase keepalive on Termux side (already handled on coordinator)
   # - "--no-mmap"
   # - "--mlock"

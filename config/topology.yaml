@@ -27,7 +27,7 @@ workers:
         # auto — uses VRAM if available, else RAM
 
   - id: "android-phone-lts"
-    host: "192.168.178.47"     # WLAN IP of the Android device (check with: ip addr show wlan0)
+    host: "192.168.178.22"     # WLAN IP of the Android device (check with: ip addr show wlan0)
     grpc_port: 50051
     rpc_port: 8765
     tags: ["arm64", "termux"]
@@ -39,7 +39,7 @@ workers:
     grpc_port: 50051
     rpc_port: 8765
     tags: ["arm64", "termux"]
-    enabled: true            # set to true once the device is set up
+    enabled: false            # set to true once the device is set up
     mem_limit_mb: 2048  
 
   - id: "android-phone-v3"
@@ -47,7 +47,7 @@ workers:
     grpc_port: 50051
     rpc_port: 8765
     tags: ["arm64", "termux"]
-    enabled: true            # set to true once the device is set up
+    enabled: false            # set to true once the device is set up
     mem_limit_mb: 2048  
 
   - id: "android-tab-e"
@@ -55,8 +55,16 @@ workers:
     grpc_port: 50051
     rpc_port: 8765
     tags: ["arm64", "termux"]
-    enabled: true            # set to true once the device is set up
-    mem_limit_mb: 2048  
+    enabled: false            # set to true once the device is set up
+    mem_limit_mb: 0  
+
+  - id: "android-tab-a"
+    host: "192.168.178.101"     # WLAN IP of the Android device (check with: ip addr show wlan0)
+    grpc_port: 50051
+    rpc_port: 8765
+    tags: ["arm64", "termux"]
+    enabled: false            # set to true once the device is set up
+    mem_limit_mb: 0 
 
  #- id: "jetson-orin"
   #host: "192.168.1.104"

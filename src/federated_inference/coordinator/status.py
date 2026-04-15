@@ -16,6 +16,7 @@ def build_coordinator_snapshot(coordinator: "Coordinator") -> dict:
     settings = coordinator.topology.coordinator
     total_ram, free_ram = di.probe_ram()
     total_vram, free_vram = di.probe_vram()
+    net_tx, net_rx = di.probe_net()
 
     return {
         "id": "orchestrator",
@@ -30,6 +31,8 @@ def build_coordinator_snapshot(coordinator: "Coordinator") -> dict:
             "free_vram_bytes": free_vram,
             "os_info": di.get_os_info(),
             "cpu_percent": di.probe_cpu(),
+            "net_tx_bytes_per_sec": net_tx,
+            "net_rx_bytes_per_sec": net_rx,
         },
     }
 

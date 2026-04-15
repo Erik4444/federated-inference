@@ -112,6 +112,11 @@ class LlamaManager:
                 await asyncio.sleep(5)
                 continue
 
+            # Cancel any pending debounce restart — we're starting now.
+            if self._debounce_handle is not None:
+                self._debounce_handle.cancel()
+                self._debounce_handle = None
+
             await self._start_server(active_addresses)
 
             # If the server failed to reach READY state, recycle the RPC workers
@@ -136,6 +141,9 @@ class LlamaManager:
             # - worker topology change (request_restart called externally)
             # - llama-server process died (_monitor_process sets the event)
             self._restart_event.clear()
+            # Topology may have changed during model loading; catch it now.
+            if self._should_restart():
+                self._restart_event.set()
             await self._restart_event.wait()
 
             # Check if the topology actually changed, or if the process just died.
@@ -202,6 +210,8 @@ class LlamaManager:
             "--rpc", ",".join(rpc_addresses),
             *self._model.llama_server_extra_flags,
         ]
+        if m.ubatch_size > 0:
+            cmd += ["--ubatch-size", str(m.ubatch_size)]
         logger.info("Starting llama-server: %s", " ".join(cmd))
         self._process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -261,6 +271,7 @@ class LlamaManager:
                 await asyncio.wait_for(self._process.wait(), timeout=15)
             except asyncio.TimeoutError:
                 self._process.kill()
+                await self._process.wait()
         self._process = None
         self._running_rpc_addresses = []
         self.state = CoordinatorState.IDLE

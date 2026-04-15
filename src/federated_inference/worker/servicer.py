@@ -30,6 +30,7 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
         total_ram, free_ram = di.probe_ram()
         total_vram, free_vram = di.probe_vram()
 
+        net_tx, net_rx = di.probe_net()
         info = worker_pb2.DeviceInfo(
             arch=di.get_arch(),
             total_ram_bytes=total_ram,
@@ -39,6 +40,8 @@ class WorkerServicer(worker_pb2_grpc.WorkerServiceServicer):
             os_info=di.get_os_info(),
             llama_cpp_version=di.probe_llama_version(self._config.llama_rpc_binary),
             cpu_percent=di.probe_cpu(),
+            net_tx_bytes_per_sec=net_tx,
+            net_rx_bytes_per_sec=net_rx,
         )
 
         running = self._rpc.is_running()

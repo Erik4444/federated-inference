@@ -55,6 +55,11 @@ class ModelSettings(BaseModel):
     context_length: int = 4096
     n_gpu_layers: int = -1
     batch_size: int = 512
+    # ubatch_size controls how many tokens flow through each RPC call.
+    # Smaller values reduce per-transfer size at the cost of more round trips.
+    # For WiFi RPC pipelines 128–256 is often faster than the default 512.
+    # 0 = use llama-server default (same as batch_size).
+    ubatch_size: int = 0
     threads: int = 4
 
 
