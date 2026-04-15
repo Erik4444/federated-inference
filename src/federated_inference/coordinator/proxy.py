@@ -10,6 +10,61 @@ from fastapi.responses import StreamingResponse
 
 logger = logging.getLogger(__name__)
 
+
+def _normalize_messages(messages: list[dict]) -> list[dict]:
+    """Normalize a chat message list for models that require strict alternation.
+
+    Some models (e.g. Gemma 3) do not support a dedicated ``system`` role and
+    require messages to strictly alternate user → assistant → user → …
+
+    This function:
+      1. Collects consecutive ``system`` messages and merges their content into
+         the immediately following ``user`` message (prepended with a blank line).
+         If no ``user`` follows, a synthetic one is inserted.
+      2. Merges consecutive messages of the same role so the sequence always
+         alternates, which prevents Jinja template errors in llama-server.
+    """
+    if not messages:
+        return messages
+
+    # Step 1: fold system messages into adjacent user messages.
+    folded: list[dict] = []
+    pending_system: list[str] = []
+    for msg in messages:
+        role = msg.get("role", "")
+        content = msg.get("content", "") or ""
+        if role == "system":
+            pending_system.append(content)
+        else:
+            if pending_system and role == "user":
+                prefix = "\n\n".join(pending_system)
+                content = f"{prefix}\n\n{content}" if content else prefix
+                pending_system = []
+            elif pending_system:
+                # Non-user message follows system — insert a synthetic user turn.
+                folded.append({"role": "user", "content": "\n\n".join(pending_system)})
+                pending_system = []
+            folded.append({**msg, "content": content})
+
+    if pending_system:
+        # System messages at the very end with no user message after them.
+        folded.append({"role": "user", "content": "\n\n".join(pending_system)})
+
+    # Step 2: merge consecutive same-role messages.
+    merged: list[dict] = []
+    for msg in folded:
+        if merged and merged[-1]["role"] == msg["role"]:
+            sep = "\n\n"
+            merged[-1] = {
+                **merged[-1],
+                "content": merged[-1]["content"] + sep + (msg.get("content") or ""),
+            }
+        else:
+            merged.append(msg)
+
+    return merged
+
+
 # How long a request will wait for llama-server to become ready during a restart.
 _READY_WAIT_TIMEOUT = 60.0
 # Number of times to retry a request that failed due to a connection error.
@@ -72,9 +127,33 @@ class LlamaProxy:
             if k.lower() not in ("host", "content-length")
         }
 
-        # Detect if the client wants streaming (SSE)
+        # Detect if the client wants streaming (SSE) and normalize messages
+        # for models (e.g. Gemma 3) that require strict user/assistant alternation
+        # and have no native system-role support.
         is_streaming = False
-        if body:
+        if body and path.rstrip("/").endswith("/chat/completions"):
+            try:
+                payload = json.loads(body)
+                is_streaming = payload.get("stream", False)
+                original = payload.get("messages", [])
+                logger.debug(
+                    "chat/completions incoming roles: %s",
+                    [m.get("role") for m in original],
+                )
+                normalized = _normalize_messages(original)
+                if normalized != original:
+                    logger.info(
+                        "Messages normalized: %s → %s",
+                        [m.get("role") for m in original],
+                        [m.get("role") for m in normalized],
+                    )
+                    payload["messages"] = normalized
+                    body = json.dumps(payload).encode()
+                    headers.pop("content-length", None)
+                    headers.pop("Content-Length", None)
+            except (ValueError, KeyError):
+                pass
+        elif body:
             try:
                 payload = json.loads(body)
                 is_streaming = payload.get("stream", False)

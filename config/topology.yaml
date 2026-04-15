@@ -32,7 +32,7 @@ workers:
     rpc_port: 8765
     tags: ["arm64", "termux"]
     enabled: true            # set to true once the device is set up
-    mem_limit_mb: 2048        # cap at 2 GB — leave room for Android OS
+    mem_limit_mb: 1024        # cap at 2 GB — leave room for Android OS
 
   - id: "android-phone-v2"
     host: "192.168.178.99"     # WLAN IP of the Android device (check with: ip addr show wlan0)
